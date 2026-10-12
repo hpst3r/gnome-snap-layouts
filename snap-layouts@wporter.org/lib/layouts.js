@@ -435,6 +435,50 @@ export function restoreRect(snappedRect, savedSize, px, py, workArea) {
     };
 }
 
+const rectArea = r => Math.max(0, r.width) * Math.max(0, r.height);
+
+/**
+ * How much a window frame and a zone overlap.
+ *
+ * @param {{x, y, width, height}} zone zone target rect
+ * @param {{x, y, width, height}} frame window frame rect
+ * @returns {{ofZone: number, ofFrame: number}} intersection area as a
+ *   fraction of the zone's and of the frame's area (0 for empty rects)
+ */
+export function rectCoverage(zone, frame) {
+    const w = Math.min(zone.x + zone.width, frame.x + frame.width) - Math.max(zone.x, frame.x);
+    const h = Math.min(zone.y + zone.height, frame.y + frame.height) - Math.max(zone.y, frame.y);
+    const inter = w > 0 && h > 0 ? w * h : 0;
+    const zoneArea = rectArea(zone);
+    const frameArea = rectArea(frame);
+    return {
+        ofZone: zoneArea > 0 ? inter / zoneArea : 0,
+        ofFrame: frameArea > 0 ? inter / frameArea : 0,
+    };
+}
+
+/**
+ * Zones already filled by a window: some frame covers at least `threshold`
+ * of the zone and lies at least `threshold` inside it (the slack tolerates
+ * terminals' character-grid sizing; a maximized window fills no quarter).
+ *
+ * @param {Array<{x, y, width, height}>} zoneRects zone target rects
+ * @param {Array<{x, y, width, height}>} frameRects other windows' frames
+ * @param {number} [threshold] fraction in (0, 1]
+ * @returns {Set<number>} indices into `zoneRects`
+ */
+export function occupiedZoneIndices(zoneRects, frameRects, threshold = 0.9) {
+    const occupied = new Set();
+    (zoneRects ?? []).forEach((zone, i) => {
+        if ((frameRects ?? []).some(frame => {
+            const {ofZone, ofFrame} = rectCoverage(zone, frame);
+            return ofZone >= threshold && ofFrame >= threshold;
+        }))
+            occupied.add(i);
+    });
+    return occupied;
+}
+
 /**
  * Whether two rects are equal within `tol` px on every edge.
  *

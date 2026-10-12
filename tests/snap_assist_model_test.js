@@ -222,6 +222,16 @@ for (const zone of zones) {
     const t = mk('t', {transientFor: a});
     const res4 = selectCandidates([t, a], {monitorIndex: 0, normalType: NORMAL});
     check(res4.length === 1 && res4[0] === a, `selectCandidates drops transient windows (${res4.map(w => w.name)})`);
+    // Amendment 5: windows filling a zone (excludeWindows) join the placed
+    // set as exclusions; the rest keep their MRU order.
+    const g = mk('g'), h = mk('h');
+    const placed = [b], occupants = [a, g];
+    const res5 = selectCandidates([a, b, f, g, h], {
+        monitorIndex: 0, normalType: NORMAL, excluded: new Set([...placed, ...occupants]),
+    });
+    check(res5.map(w => w.name).join() === 'f,h', `selectCandidates drops occupants (${res5.map(w => w.name)})`);
+    const res6 = selectCandidates([a, g], {monitorIndex: 0, normalType: NORMAL, excluded: occupants});
+    check(res6.length === 0, 'selectCandidates: nothing left when every window occupies a zone');
 }
 
 // --- navigateIndex ---------------------------------------------------------

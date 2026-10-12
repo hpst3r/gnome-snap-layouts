@@ -161,6 +161,10 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
             'Dragging a snapped window gives it back its previous size'));
         snapping.add(switchRow(settings, 'snap-assist', 'Snap Assist',
             'Offer other windows for the remaining zones after a snap'));
+        const skipOccupied = switchRow(settings, 'assist-skip-occupied', 'Skip zones already filled',
+            'Snap Assist leaves out zones that another window already fills');
+        settings.bind('snap-assist', skipOccupied, 'sensitive', Gio.SettingsBindFlags.GET);
+        snapping.add(skipOccupied);
         page.add(snapping);
 
         const layouts = new Adw.PreferencesGroup({title: 'Layouts'});
