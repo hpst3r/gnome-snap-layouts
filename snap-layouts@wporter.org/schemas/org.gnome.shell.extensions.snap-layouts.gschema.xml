@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.snap-layouts" path="/org/gnome/shell/extensions/snap-layouts/">
+    <key name="trigger-width" type="i">
+      <range min="10" max="100"/>
+      <default>40</default>
+      <summary>Trigger band width (% of monitor width, centred)</summary>
+    </key>
+    <key name="trigger-height" type="i">
+      <range min="8" max="200"/>
+      <default>48</default>
+      <summary>Trigger band height below the work-area top (px)</summary>
+    </key>
+    <key name="show-delay-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>80</default>
+      <summary>Delay before the layout picker appears (ms)</summary>
+    </key>
+    <key name="gap" type="i">
+      <range min="0" max="64"/>
+      <default>0</default>
+      <summary>Gap between snapped windows (px)</summary>
+    </key>
+    <key name="restore-size-on-drag" type="b">
+      <default>true</default>
+      <summary>Restore a snapped window's previous size when it is dragged out</summary>
+    </key>
+    <key name="snap-assist" type="b">
+      <default>true</default>
+      <summary>Offer other windows for the remaining zones after a snap</summary>
+    </key>
+    <key name="disabled-layouts" type="as">
+      <default>[]</default>
+      <summary>Built-in layout ids hidden from the picker</summary>
+    </key>
+    <key name="custom-layouts" type="s">
+      <default>'[]'</default>
+      <summary>Custom layouts (JSON array)</summary>
+    </key>
+    <key name="debug" type="b">
+      <default>false</default>
+      <summary>Log snapping decisions</summary>
+    </key>
+  </schema>
+</schemalist>
