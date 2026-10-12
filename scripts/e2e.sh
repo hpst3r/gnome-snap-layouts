@@ -67,13 +67,20 @@ if [[ -z ${E2E_INNER:-} ]]; then
             echo '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>'
         } >"$4"
     }
-    write_bus_conf session "unix:dir=$RUN/rt" "$RUN/dbus/services" "$RUN/dbus/session.conf"
-    SYSTEM_SOCK=$RUN/rt/sysbus  # keep short: AF_UNIX paths max 107 bytes
+    # AF_UNIX socket paths are limited to 107 bytes; from a deep checkout
+    # (e.g. a worktree) reach the runtime dir through a short symlink.
+    RT=$RUN/rt
+    if (( ${#RT} > 60 )); then
+        RT=$(mktemp -u /tmp/snap-e2e-XXXXXX)
+        ln -s "$RUN/rt" "$RT"
+    fi
+    write_bus_conf session "unix:dir=$RT" "$RUN/dbus/services" "$RUN/dbus/session.conf"
+    SYSTEM_SOCK=$RT/sysbus  # keep short: AF_UNIX paths max 107 bytes
     write_bus_conf system "unix:path=$SYSTEM_SOCK" "" "$RUN/dbus/system.conf"
     dbus-daemon --config-file="$RUN/dbus/system.conf" --nofork --nopidfile \
         2>>"$RUN/session.log" &
     SYSTEM_BUS_PID=$!
-    trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true' EXIT
+    trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true; [[ $RT == /tmp/* ]] && rm -f "$RT"' EXIT
     for _ in $(seq 50); do
         [[ -S $SYSTEM_SOCK ]] && break
         sleep 0.1
@@ -94,11 +101,12 @@ if [[ -z ${E2E_INNER:-} ]]; then
         PATH="/usr/local/bin:/usr/bin:/bin" LANG=C.UTF-8 \
         XDG_CONFIG_HOME="$RUN/config" XDG_DATA_HOME="$RUN/data" \
         XDG_CACHE_HOME="$RUN/cache" XDG_STATE_HOME="$RUN/state" \
-        XDG_RUNTIME_DIR="$RUN/rt" XDG_SESSION_TYPE=wayland \
+        XDG_RUNTIME_DIR="$RT" XDG_SESSION_TYPE=wayland \
         XDG_DATA_DIRS="/usr/local/share:/usr/share" \
         NO_AT_BRIDGE=1 GTK_A11Y=none GSK_RENDERER=cairo \
         E2E_INNER=1 E2E_RUN="$RUN" E2E_REPO="$REPO" \
-        E2E_TIMEOUT="${E2E_TIMEOUT:-240}" \
+        E2E_TIMEOUT="${E2E_TIMEOUT:-$([[ -n ${SNAP_REVIEW:-} ]] && echo 900 || echo 240)}" \
+        SNAP_REVIEW="${SNAP_REVIEW:-}" \
         E2E_CLIENT_DEBUG="${E2E_CLIENT_DEBUG:-}" E2E_HOLD="${E2E_HOLD:-}" \
         dbus-run-session --config-file="$RUN/dbus/session.conf" \
         -- "$REPO/scripts/e2e.sh" "$@" \
@@ -106,6 +114,7 @@ if [[ -z ${E2E_INNER:-} ]]; then
     kill "$SYSTEM_BUS_PID" 2>/dev/null || true
     wait "$SYSTEM_BUS_PID" 2>/dev/null || true
     trap - EXIT
+    [[ $RT == /tmp/* ]] && rm -f "$RT"
 
     AFTER=$(host_mtime)
     echo "host dconf mtime before: $BEFORE"
@@ -147,8 +156,11 @@ gsettings set org.gnome.desktop.screensaver lock-enabled false
 GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts gap 0
 GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts debug true
 
+# Review runs (SNAP_REVIEW set) add a second monitor to the right.
+EXTRA_MONITORS=()
+[[ -n ${SNAP_REVIEW:-} ]] && EXTRA_MONITORS=(--virtual-monitor 1280x1024)
 gnome-shell --headless --wayland --no-x11 \
-    --virtual-monitor 1920x1080 \
+    --virtual-monitor 1920x1080 "${EXTRA_MONITORS[@]}" \
     --wayland-display "$DISPLAY_NAME" \
     >"$LOG" 2>&1 &
 SHELL_PID=$!

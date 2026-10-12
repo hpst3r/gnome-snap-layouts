@@ -690,8 +690,17 @@ def sc_gap(ctx):
         ctx.ext_set("gap", "0")
 
 
+# SNAP_REVIEW=1 runs the @review scenarios; any other non-empty value is a
+# space-separated scenario/tag selection (with the review scenarios loaded).
+SNAP_REVIEW = os.environ.get("SNAP_REVIEW", "")
+if SNAP_REVIEW:
+    import review_scenarios  # noqa: E402,F401  (registers @review scenarios)
+
+
 # ---------------------------------------------------------------- runner
 def select(names):
+    if not names and SNAP_REVIEW:
+        names = ["@review"] if SNAP_REVIEW == "1" else SNAP_REVIEW.split()
     if not names:
         return [n for n, s in SCENARIOS.items() if "review" not in s["tags"]]
     out = []
