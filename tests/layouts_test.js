@@ -287,6 +287,38 @@ test('U6 pickerGeometry and hitTest', () => {
     assert(Math.abs(g3.x + g3.width / 2 - (1920 + 683)) <= 0.5, 'centred on second monitor');
     eq(g3.y, 8, 'second monitor top');
     eq(new Set(g3.thumbs.map(t => t.y)).size, 1, 'single row');
+
+    // Amendment 2: top edge 8 (scaled) px below the trigger band bottom.
+    const g4 = pickerGeometry(mon, wa, layouts, {triggerHeight: 8});
+    eq(g4.y, wa.y + 8 + 8, 'top edge at band bottom + 8');
+    eq(g4.height, g.height, 'trigger height only moves the picker');
+    eq(g4.thumbs[0].y - g4.y, g.thumbs[0].y - g.y, 'thumbs move with the picker');
+    const g5 = pickerGeometry(mon, wa, layouts, {scale: 2, triggerHeight: 48});
+    eq(g5.y, wa.y + 48 + 16, 'scale 2: band bottom + 16');
+    const g6 = pickerGeometry(mon2, mon2, layouts.slice(0, 2), {triggerHeight: 200});
+    eq(g6.y, 208, 'second monitor, tall band');
+});
+
+test('U6b no picker cell reachable from inside the trigger band', () => {
+    const mon = {x: 0, y: 0, width: 1920, height: 1080};
+    const wa = {x: 0, y: 32, width: 1920, height: 1048};
+    const layouts = enabledLayouts([], []);
+    for (const scale of [1, 2, 3]) {
+        for (const triggerHeight of [8, 9, 48, 120, 200]) {
+            const opts = {triggerWidthPct: 100, triggerHeight};
+            const g = pickerGeometry(mon, wa, layouts, {scale, triggerHeight});
+            const bandBottom = wa.y + triggerHeight;
+            assert(g.y >= bandBottom + 8 * scale, `picker below band (scale ${scale}, h ${triggerHeight})`);
+            // The lowest band row never hits a cell, anywhere across the band.
+            for (let px = 0; px < mon.width; px += 4) {
+                const py = bandBottom - 1;
+                if (inTriggerBand(mon, wa, px, py, opts) && hitTest(g, px, py)) {
+                    assert(false, `cell hit at ${px},${py} (scale ${scale}, h ${triggerHeight})`);
+                    break;
+                }
+            }
+        }
+    }
 });
 
 test('U7 restoreRect', () => {
@@ -373,6 +405,21 @@ test('drag state machine', () => {
     s = stepDragState(s, {...base, now: 100, inBand: true, monitor: 1});
     eq(s.phase, 'pending', 'restarted on monitor change');
     eq(s.monitor, 1, 'pending on new monitor');
+});
+
+test('drag starting inside the band', () => {
+    const base = {monitor: 0, inPicker: false, showDelay: 0};
+    let s = initialDragState(true);
+    eq(s.phase, 'blocked', 'starts blocked');
+    s = stepDragState(s, {...base, now: 0, inBand: true});
+    eq(s.phase, 'blocked', 'staying in the band never shows the picker');
+    s = stepDragState(s, {...base, now: 500, inBand: true, inPicker: true});
+    eq(s.phase, 'blocked', 'still blocked later');
+    s = stepDragState(s, {...base, now: 510, inBand: false});
+    eq(s.phase, 'armed', 'armed after leaving the band');
+    s = stepDragState(s, {...base, now: 520, inBand: true});
+    eq(s.phase, 'shown', 'shows on re-entry');
+    eq(initialDragState(false).phase, 'armed', 'outside the band starts armed');
 });
 
 print(`${passes} assertions passed, ${failures} failed`);

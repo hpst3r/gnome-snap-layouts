@@ -10,7 +10,7 @@ export const THUMB_WIDTH = 112;
 /** Space between thumbnails and around the picker edge (logical px). */
 export const PICKER_SPACING = 10;
 export const PICKER_PADDING = 12;
-/** Distance of the picker's top edge below the work-area top (logical px). */
+/** Distance of the picker's top edge below the trigger band (logical px). */
 export const PICKER_TOP_OFFSET = 8;
 /** Gutter between zone cells inside a thumbnail (logical px). */
 export const CELL_GUTTER = 3;
@@ -243,11 +243,15 @@ export function inTriggerBand(monitor, workArea, px, py, {triggerWidthPct, trigg
  *
  * @param {{x, y, width, height}} monitor
  * @param {{x, y, width, height}} workArea
+ * The top edge sits `PICKER_TOP_OFFSET` (scaled) below the bottom of the
+ * trigger band, so no cell is reachable from inside the band.
+ *
  * @param {object[]} layouts layouts in picker order
- * @param {{scale?: number}} [opts] St theme scale factor
+ * @param {{scale?: number, triggerHeight?: number}} [opts] St theme scale
+ *   factor; trigger band height below the work-area top (px)
  * @returns {object} see docs/SPEC.md
  */
-export function pickerGeometry(monitor, workArea, layouts, {scale = 1} = {}) {
+export function pickerGeometry(monitor, workArea, layouts, {scale = 1, triggerHeight = 0} = {}) {
     const padding = PICKER_PADDING * scale;
     const spacing = PICKER_SPACING * scale;
     const thumbW = THUMB_WIDTH * scale;
@@ -260,7 +264,7 @@ export function pickerGeometry(monitor, workArea, layouts, {scale = 1} = {}) {
     const width = 2 * padding + cols * thumbW + (cols - 1) * spacing;
     const height = 2 * padding + rows * thumbH + (rows - 1) * spacing;
     const x = Math.round(monitor.x + (monitor.width - width) / 2);
-    const y = workArea.y + PICKER_TOP_OFFSET * scale;
+    const y = workArea.y + Math.max(0, triggerHeight) + PICKER_TOP_OFFSET * scale;
 
     const thumbs = layouts.map((layout, layoutIndex) => {
         const tx = x + padding + (layoutIndex % cols) * (thumbW + spacing);
