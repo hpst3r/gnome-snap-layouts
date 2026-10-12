@@ -72,7 +72,7 @@ UUID `snap-layouts@wporter.org`. License AGPL-3.0-or-later. Target: GNOME Shell
 | key | type | default | range/notes |
 |---|---|---|---|
 | `trigger-width` | i | 40 | 10–100 (% of monitor width, centred) |
-| `trigger-height` | i | 48 | 8–200 (px below work-area top) |
+| `trigger-height` | i | 8 (Amendment 2) | 8–200 (px below work-area top) |
 | `show-delay-ms` | i | 80 | 0–1000 |
 | `gap` | i | 0 | 0–64 (px between zones and at work-area edges) |
 | `restore-size-on-drag` | b | true | |
@@ -228,6 +228,27 @@ unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
 - The extension must tolerate being disabled/re-enabled at any moment
   (including mid-drag and while assist is open), e.g. by another extension's
   toggle.
+
+## Amendment 2 (after review wave)
+
+- **Trigger (W11-like):** default `trigger-height` is now **8** (the band is
+  the top bar plus 8 px below the work-area top). The picker's top edge is
+  `bandBottom + 8 × scale` (`pickerGeometry(monitor, workArea, layouts,
+  {scale, triggerHeight})`), so no picker cell is ever reachable from inside
+  the band, for any trigger-height. A drag that BEGINS with the pointer
+  inside the band (e.g. grabbing a maximized/top-snapped window's headerbar)
+  does not arm until the pointer has left the band once.
+- **Picker construction:** `new Picker(geometry, layouts, {window})` — the
+  dragged window, so the drop preview can be stacked directly below it in
+  `global.window_group` (like mutter's tile preview) instead of tinting it.
+- **Snap targets:** windows tiled by mutter (tile mode / partial maximize
+  flags) and maximized windows are untiled/unmaximized before placement; the
+  remembered restore size is their normal (unmaximized) size.
+- **Eligibility:** transient windows (`get_transient_for()` non-null) never
+  show the picker and are never Snap Assist candidates.
+- **Review suites:** `make review` runs `SNAP_REVIEW=1 make test`,
+  `SNAP_REVIEW=core scripts/e2e.sh`, `SNAP_REVIEW=ux scripts/e2e.sh`; after the
+  fix wave they are regression suites and must pass (except `@diag`).
 
 ## Later (not this wave)
 

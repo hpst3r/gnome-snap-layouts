@@ -67,6 +67,7 @@ if [[ -z ${E2E_INNER:-} ]]; then
             echo '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>'
         } >"$4"
     }
+    RT=$RUN/rt
     # Fixed short socket names: unix:dir= appends dbus-XXXXXXXXXX, which
     # overflows sun_path (107 bytes) for deep checkouts such as worktrees.
     write_bus_conf session "unix:path=$RUN/rt/bus" "$RUN/dbus/services" "$RUN/dbus/session.conf"
@@ -75,7 +76,7 @@ if [[ -z ${E2E_INNER:-} ]]; then
     dbus-daemon --config-file="$RUN/dbus/system.conf" --nofork --nopidfile \
         2>>"$RUN/session.log" &
     SYSTEM_BUS_PID=$!
-    trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true; [[ $RT == /tmp/* ]] && rm -f "$RT"' EXIT
+    trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true' EXIT
     for _ in $(seq 50); do
         [[ -S $SYSTEM_SOCK ]] && break
         sleep 0.1
@@ -109,7 +110,6 @@ if [[ -z ${E2E_INNER:-} ]]; then
     kill "$SYSTEM_BUS_PID" 2>/dev/null || true
     wait "$SYSTEM_BUS_PID" 2>/dev/null || true
     trap - EXIT
-    [[ $RT == /tmp/* ]] && rm -f "$RT"
 
     AFTER=$(host_mtime)
     echo "host dconf mtime before: $BEFORE"

@@ -15,9 +15,12 @@ export class Picker {
     /**
      * @param {object} geometry from pickerGeometry()
      * @param {object[]} layouts layouts in geometry.thumbs order
+     * @param {object} [opts]
+     * @param {Meta.Window} [opts.window] the window being dragged
      */
-    constructor(geometry, layouts) {
+    constructor(geometry, layouts, {window = null} = {}) {
         this._geometry = geometry;
+        this._window = window;
         this._cells = new Map();
         this._hoverKey = null;
 

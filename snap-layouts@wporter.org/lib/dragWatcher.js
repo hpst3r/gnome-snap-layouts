@@ -161,7 +161,7 @@ export class DragWatcher {
         s.workArea = {x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height};
         s.layouts = cfg.layouts;
         s.geometry = pickerGeometry(monitor, s.workArea, s.layouts, {scale});
-        s.picker = new Picker(s.geometry, s.layouts);
+        s.picker = new Picker(s.geometry, s.layouts, {window: s.window});
         s.hit = null;
         this._log('picker shown on monitor', monitorIndex);
     }

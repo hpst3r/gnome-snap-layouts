@@ -8,7 +8,7 @@
     </key>
     <key name="trigger-height" type="i">
       <range min="8" max="200"/>
-      <default>48</default>
+      <default>8</default>
       <summary>Trigger band height below the work-area top (px)</summary>
     </key>
     <key name="show-delay-ms" type="i">
