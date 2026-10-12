@@ -1,0 +1,7 @@
+{
+  "uuid": "snaptest@wporter.org",
+  "name": "Snap Layouts E2E test helper",
+  "description": "TEST ONLY. Exposes org.wporter.SnapTest on the session bus for the snap-layouts E2E harness. Never install on a real session.",
+  "shell-version": ["50"],
+  "version-name": "0.1.0"
+}
