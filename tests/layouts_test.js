@@ -4,7 +4,8 @@
 import {
     BUILTIN_LAYOUTS, validateLayout, parseCustomLayouts, enabledLayouts,
     zoneRect, inTriggerBand, pickerGeometry, hitTest, pointerInPicker,
-    restoreRect, rectsClose, MAX_COLUMNS,
+    restoreRect, rectsClose, MAX_COLUMNS, workAreaOrientation, layoutsForWorkArea,
+    THUMB_MAX_SIDE,
 } from '../snap-layouts@wporter.org/lib/layouts.js';
 import {
     initialDragState, stepDragState, HIDE_DELAY_MS,
@@ -64,8 +65,13 @@ test('U1 built-ins validate with expected zone counts', () => {
         'half-left-quarters-right': 3,
         'quarters-left-half-right': 3,
         'quarter-half-quarter': 3,
+        'v-halves': 2,
+        'v-thirds': 3,
+        'v-large-two-small': 3,
     };
     eq(BUILTIN_LAYOUTS.map(l => l.id), Object.keys(counts), 'built-in order');
+    eq(BUILTIN_LAYOUTS.map(l => l.orientation),
+        [...Array(7).fill('landscape'), ...Array(3).fill('portrait')], 'built-in orientations');
     assert(Object.isFrozen(BUILTIN_LAYOUTS), 'BUILTIN_LAYOUTS frozen');
     for (const l of BUILTIN_LAYOUTS) {
         const res = validateLayout(l);
@@ -194,7 +200,8 @@ test('U4 parseCustomLayouts', () => {
     eq(enabled.map(l => l.id).slice(0, 5),
         ['halves', 'two-thirds-left', 'half-left-quarters-right', 'quarters-left-half-right', 'quarter-half-quarter'],
         'enabledLayouts filters built-ins in order');
-    eq(enabled.length, 5 + res.layouts.length, 'customs appended');
+    eq(enabled.length, BUILTIN_LAYOUTS.length - 2 + res.layouts.length, 'customs appended');
+    eq(enabled.slice(-res.layouts.length).map(l => l.id), res.layouts.map(l => l.id), 'customs last');
 });
 
 test('U5 inTriggerBand boundaries', () => {
@@ -420,6 +427,200 @@ test('drag starting inside the band', () => {
     s = stepDragState(s, {...base, now: 520, inBand: true});
     eq(s.phase, 'shown', 'shows on re-entry');
     eq(initialDragState(false).phase, 'armed', 'outside the band starts armed');
+});
+
+// ---- Amendment 3: portrait layouts and orientation matching ----
+
+const PORTRAIT_WORK_AREAS = [
+    {x: 1920, y: 0, width: 1080, height: 1920},
+    {x: 0, y: 32, width: 1080, height: 1888},
+    {x: 0, y: 0, width: 1200, height: 1920},
+];
+const PORTRAIT_IDS = ['v-halves', 'v-thirds', 'v-large-two-small'];
+const LANDSCAPE_IDS = BUILTIN_LAYOUTS.filter(l => l.orientation === 'landscape').map(l => l.id);
+const byId = id => BUILTIN_LAYOUTS.find(l => l.id === id);
+
+test('P1 portrait built-ins: zones as in the SPEC, reading order', () => {
+    const t = 1 / 3;
+    eq(byId('v-halves').zones, [{x: 0, y: 0, w: 1, h: 0.5}, {x: 0, y: 0.5, w: 1, h: 0.5}], 'v-halves');
+    eq(byId('v-thirds').zones, [{x: 0, y: 0, w: 1, h: t}, {x: 0, y: t, w: 1, h: t},
+        {x: 0, y: 2 / 3, w: 1, h: t}], 'v-thirds');
+    eq(byId('v-large-two-small').zones, [{x: 0, y: 0, w: 1, h: 0.5}, {x: 0, y: 0.5, w: 0.5, h: 0.5},
+        {x: 0.5, y: 0.5, w: 0.5, h: 0.5}], 'v-large-two-small');
+    eq(PORTRAIT_IDS.map(id => byId(id).name), ['Stacked halves', 'Stacked thirds', 'Large + two small'], 'names');
+    for (const id of PORTRAIT_IDS) {
+        assert(Object.isFrozen(byId(id)) && Object.isFrozen(byId(id).zones), `${id} frozen`);
+        eq(validateLayout(byId(id)).layout?.orientation, 'portrait', `${id} validates as portrait`);
+    }
+});
+
+test('P2 portrait work areas tile exactly (gap 0) and gap 8 separates by 8', () => {
+    for (const wa of PORTRAIT_WORK_AREAS) {
+        for (const l of BUILTIN_LAYOUTS) {
+            const tag = `${l.id} @ ${JSON.stringify(wa)}`;
+            const rects = l.zones.map(z => zoneRect(wa, z, 0));
+            assert(rects.every(isInt), `${tag}: integer edges`);
+            assert(rects.every(r => containsRect(wa, r)), `${tag}: inside`);
+            eq(rects.reduce((s, r) => s + area(r), 0), area(wa), `${tag}: no holes`);
+            for (let i = 0; i < rects.length; i++) {
+                for (let j = i + 1; j < rects.length; j++)
+                    eq(intersection(rects[i], rects[j]), 0, `${tag}: ${i},${j} disjoint`);
+            }
+
+            const gapped = l.zones.map(z => zoneRect(wa, z, 8));
+            assert(gapped.every(isInt), `${tag}: gap 8 integer edges`);
+            gapped.forEach((r, i) => {
+                const p = rects[i];
+                if (p.x === wa.x)
+                    eq(r.x, wa.x + 8, `${tag} z${i} left`);
+                if (p.y === wa.y)
+                    eq(r.y, wa.y + 8, `${tag} z${i} top`);
+                if (p.x + p.width === wa.x + wa.width)
+                    eq(r.x + r.width, wa.x + wa.width - 8, `${tag} z${i} right`);
+                if (p.y + p.height === wa.y + wa.height)
+                    eq(r.y + r.height, wa.y + wa.height - 8, `${tag} z${i} bottom`);
+                assert(containsRect(p, r), `${tag} z${i} inset inside its gap-0 rect`);
+            });
+            for (let i = 0; i < rects.length; i++) {
+                for (let j = 0; j < rects.length; j++) {
+                    const a = rects[i], b = rects[j];
+                    const vOverlap = Math.min(a.y + a.height, b.y + b.height) > Math.max(a.y, b.y);
+                    const hOverlap = Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x);
+                    if (i !== j && a.x + a.width === b.x && vOverlap)
+                        eq(gapped[j].x - (gapped[i].x + gapped[i].width), 8, `${tag} z${i}|z${j}`);
+                    if (i !== j && a.y + a.height === b.y && hOverlap)
+                        eq(gapped[j].y - (gapped[i].y + gapped[i].height), 8, `${tag} z${i}/z${j}`);
+                }
+            }
+        }
+    }
+    // Exact rects on the E2E portrait monitor (1080x1920 at x 1920).
+    const wa = PORTRAIT_WORK_AREAS[0];
+    eq(byId('v-thirds').zones.map(z => zoneRect(wa, z, 0)), [
+        {x: 1920, y: 0, width: 1080, height: 640},
+        {x: 1920, y: 640, width: 1080, height: 640},
+        {x: 1920, y: 1280, width: 1080, height: 640},
+    ], 'v-thirds rects');
+    eq(byId('v-large-two-small').zones.map(z => zoneRect(wa, z, 0)), [
+        {x: 1920, y: 0, width: 1080, height: 960},
+        {x: 1920, y: 960, width: 540, height: 960},
+        {x: 2460, y: 960, width: 540, height: 960},
+    ], 'v-large-two-small rects');
+    eq(zoneRect(PORTRAIT_WORK_AREAS[1], byId('v-thirds').zones[1], 0),
+        {x: 0, y: 661, width: 1080, height: 630}, 'v-thirds:1 with a top bar (rounded edges)');
+});
+
+test('P3 custom layout orientation', () => {
+    const zones = [{x: 0, y: 0, w: 1, h: 1}];
+    eq(validateLayout({id: 'a', zones}).layout?.orientation, 'any', 'missing -> any');
+    for (const o of ['landscape', 'portrait', 'any'])
+        eq(validateLayout({id: 'a', zones, orientation: o}).layout?.orientation, o, `${o} kept`);
+    for (const bad of ['Portrait', 'vertical', '', null, 1, true, ['portrait'], {}]) {
+        const res = validateLayout({id: 'a', zones, orientation: bad});
+        assert(!res.ok && /orientation/.test(res.error), `rejects orientation ${JSON.stringify(bad)}`);
+    }
+    const res = parseCustomLayouts(JSON.stringify([
+        {id: 'p', zones, orientation: 'portrait'},
+        {id: 'x', zones, orientation: 'sideways'},
+        {id: 'v-halves', zones},          // collides with a portrait built-in
+        {zones, orientation: 'landscape'},
+    ]));
+    eq(res.layouts.map(l => [l.id, l.orientation]),
+        [['p', 'portrait'], ['v-halves-2', 'any'], ['custom-3', 'landscape']], 'parsed ids/orientations');
+    eq(res.errors.length, 1, 'bad orientation drops only that entry');
+    assert(/entry 1/.test(res.errors[0]), 'error names the entry');
+});
+
+test('P4 workAreaOrientation', () => {
+    eq(workAreaOrientation({x: 0, y: 0, width: 1920, height: 1080}), 'landscape', '16:9');
+    eq(workAreaOrientation({x: 1920, y: 0, width: 1080, height: 1920}), 'portrait', '9:16');
+    eq(workAreaOrientation({x: 0, y: 0, width: 1000, height: 1000}), 'landscape', 'square -> landscape');
+    eq(workAreaOrientation({x: 0, y: 0, width: 1000, height: 1001}), 'portrait', 'just taller');
+    // A tall top bar can make a square monitor's work area landscape.
+    eq(workAreaOrientation({x: 0, y: 32, width: 1080, height: 1048}), 'landscape', 'work area, not monitor');
+});
+
+test('P5 layoutsForWorkArea', () => {
+    const land = {x: 0, y: 32, width: 1920, height: 1048};
+    const port = {x: 1920, y: 0, width: 1080, height: 1920};
+    const zones = [{x: 0, y: 0, w: 1, h: 1}];
+    const {layouts: customs} = parseCustomLayouts(JSON.stringify([
+        {id: 'c-any', zones},
+        {id: 'c-port', zones, orientation: 'portrait'},
+        {id: 'c-land', zones, orientation: 'landscape'},
+        {id: 'c-any2', zones, orientation: 'any'},
+    ]));
+    const all = enabledLayouts([], customs);
+    const ids = ls => ls.map(l => l.id);
+
+    eq(ids(layoutsForWorkArea(all, land, true)), [...LANDSCAPE_IDS, 'c-any', 'c-land', 'c-any2'], 'landscape, matched');
+    eq(ids(layoutsForWorkArea(all, port, true)), [...PORTRAIT_IDS, 'c-any', 'c-port', 'c-any2'], 'portrait, matched');
+    eq(ids(layoutsForWorkArea(all, land, false)), ids(all), 'landscape, unmatched: all in order');
+    eq(ids(layoutsForWorkArea(all, port, false)), ids(all), 'portrait, unmatched: all in order');
+    eq(ids(layoutsForWorkArea(enabledLayouts([], []), port, true)), PORTRAIT_IDS, 'built-ins only: 3 portrait');
+    eq(layoutsForWorkArea(enabledLayouts([], []), land, true).length, 7, 'built-ins only: 7 landscape');
+    eq(ids(layoutsForWorkArea(enabledLayouts(['v-thirds'], []), port, true)),
+        ['v-halves', 'v-large-two-small'], 'disabled portrait built-in hidden');
+    eq(layoutsForWorkArea(enabledLayouts(PORTRAIT_IDS, []), port, true), [], 'nothing left -> empty');
+    eq(layoutsForWorkArea([], land, false), [], 'empty in, empty out');
+    // Layout objects without an orientation (older callers) count as `any`.
+    eq(ids(layoutsForWorkArea([{id: 'bare', zones}], port, true)), ['bare'], 'no orientation -> any');
+    const copy = layoutsForWorkArea(all, land, false);
+    assert(copy !== all, 'returns a new array');
+});
+
+test('P6 portrait pickerGeometry', () => {
+    const mon = {x: 1920, y: 0, width: 1080, height: 1920};
+    for (const [wa, mon2] of [[PORTRAIT_WORK_AREAS[0], mon],
+        [PORTRAIT_WORK_AREAS[1], {x: 0, y: 0, width: 1080, height: 1920}],
+        [PORTRAIT_WORK_AREAS[2], {x: 0, y: 0, width: 1200, height: 1920}]]) {
+        for (const scale of [1, 2]) {
+            for (const layouts of [layoutsForWorkArea(enabledLayouts([], []), wa, true), enabledLayouts([], [])]) {
+                const tag = `${JSON.stringify(wa)} x${scale} n${layouts.length}`;
+                const g = pickerGeometry(mon2, wa, layouts, {scale, triggerHeight: 8});
+                eq(g.thumbs.length, layouts.length, `${tag}: one thumb per layout`);
+                eq(g.y, wa.y + 8 + 8 * scale, `${tag}: top edge`);
+                assert(Math.abs(g.x + g.width / 2 - (mon2.x + mon2.width / 2)) <= 0.5, `${tag}: centred`);
+                assert(g.x >= mon2.x && g.x + g.width <= mon2.x + mon2.width, `${tag}: inside monitor`);
+                const asRect = t => ({x: t.x, y: t.y, width: t.width, height: t.height});
+                for (const [i, t] of g.thumbs.entries()) {
+                    eq(t.height, THUMB_MAX_SIDE * scale, `${tag}: thumb ${i} height capped`);
+                    assert(Math.max(t.width, t.height) <= THUMB_MAX_SIDE * scale, `${tag}: longer side ≤ cap`);
+                    assert(t.width < t.height, `${tag}: thumb ${i} portrait`);
+                    assert(Math.abs(t.width / t.height - wa.width / wa.height) < 0.01,
+                        `${tag}: thumb ${i} keeps the work-area aspect`);
+                    assert(containsRect(g, asRect(t)), `${tag}: thumb ${i} inside picker`);
+                    for (let j = i + 1; j < g.thumbs.length; j++)
+                        eq(intersection(asRect(t), asRect(g.thumbs[j])), 0, `${tag}: thumbs ${i},${j} disjoint`);
+                    for (const c of t.cells) {
+                        assert(containsRect(t, c), `${tag}: ${t.layoutId}:${c.zoneIndex} inside thumb`);
+                        eq(hitTest(g, c.x + c.width / 2, c.y + c.height / 2),
+                            {layoutIndex: i, layoutId: t.layoutId, zoneIndex: c.zoneIndex},
+                            `${tag}: hit ${t.layoutId}:${c.zoneIndex}`);
+                    }
+                }
+            }
+        }
+    }
+    // Exact numbers for the E2E monitor: 176 high, 99 wide, single row of 3.
+    const wa = PORTRAIT_WORK_AREAS[0];
+    const g = pickerGeometry(mon, wa, layoutsForWorkArea(enabledLayouts([], []), wa, true));
+    eq(g.thumbs.map(t => [t.layoutId, t.width, t.height]),
+        [['v-halves', 99, 176], ['v-thirds', 99, 176], ['v-large-two-small', 99, 176]], 'thumb sizes');
+    eq(new Set(g.thumbs.map(t => t.y)).size, 1, 'single row');
+    eq(g.height, 2 * 12 + 176, 'picker height');
+    // v-thirds cells are stacked with 3 px gutters; the gutter is not a hit.
+    const [c0, c1] = g.thumbs[1].cells;
+    assert(Math.abs(c1.y - (c0.y + c0.height) - 3) < 1e-9, 'stacked gutter 3 px');
+    eq(hitTest(g, c0.x + c0.width / 2, (c0.y + c0.height + c1.y) / 2), null, 'stacked gutter not a hit');
+    // Landscape thumbnails are unaffected by the cap.
+    const gl = pickerGeometry({x: 0, y: 0, width: 1920, height: 1080}, {x: 0, y: 32, width: 1920, height: 1048},
+        enabledLayouts([], []));
+    eq([gl.thumbs[0].width, gl.thumbs[0].height], [112, 61], 'landscape thumb unchanged');
+    // Square: 112 x 112, under the cap.
+    const gs = pickerGeometry({x: 0, y: 0, width: 1000, height: 1000}, {x: 0, y: 0, width: 1000, height: 1000},
+        enabledLayouts([], []));
+    eq([gs.thumbs[0].width, gs.thumbs[0].height], [112, 112], 'square thumb');
 });
 
 print(`${passes} assertions passed, ${failures} failed`);

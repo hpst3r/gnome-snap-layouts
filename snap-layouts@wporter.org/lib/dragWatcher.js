@@ -8,7 +8,9 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {hitTest, inTriggerBand, pickerGeometry, pointerInPicker, zoneRect} from './layouts.js';
+import {
+    hitTest, inTriggerBand, layoutsForWorkArea, pickerGeometry, pointerInPicker, zoneRect,
+} from './layouts.js';
 import {initialDragState, stepDragState, PICKER_MARGIN} from './dragState.js';
 import {Picker} from './picker.js';
 
@@ -48,7 +50,8 @@ export class DragWatcher {
     /**
      * @param {object} p
      * @param {() => object} p.getConfig current settings snapshot:
-     *   {triggerWidthPct, triggerHeight, showDelay, gap, layouts}
+     *   {triggerWidthPct, triggerHeight, showDelay, gap, matchOrientation,
+     *   layouts} (all enabled layouts; filtered per monitor here)
      * @param {(window: Meta.Window, op: Meta.GrabOp) => void} p.onGrabBegin
      *   called for every grab begin (before any picker logic)
      * @param {(drop: object) => void} p.onDrop called after a grab ends over
@@ -173,13 +176,19 @@ export class DragWatcher {
     _showPicker(monitorIndex, cfg) {
         const s = this._session;
         const monitor = Main.layoutManager.monitors[monitorIndex];
-        if (!monitor || cfg.layouts.length === 0)
+        if (!monitor)
             return;
         const workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+        const wa = {x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height};
+        const layouts = layoutsForWorkArea(cfg.layouts, wa, cfg.matchOrientation ?? true);
+        if (layouts.length === 0) {
+            this._log('no layouts for monitor', monitorIndex);
+            return;
+        }
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         s.monitorIndex = monitorIndex;
-        s.workArea = {x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height};
-        s.layouts = cfg.layouts;
+        s.workArea = wa;
+        s.layouts = layouts;
         s.geometry = pickerGeometry(monitor, s.workArea, s.layouts,
             {scale, triggerHeight: cfg.triggerHeight});
         s.picker = new Picker(s.geometry, s.layouts, {window: s.window});
