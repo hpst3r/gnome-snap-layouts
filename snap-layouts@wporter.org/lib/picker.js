@@ -9,7 +9,8 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const FADE_MS = 120;
-const PREVIEW_MS = 120;
+// Like mutter's tile preview (windowManager.js WINDOW_ANIMATION_TIME).
+const PREVIEW_MS = 250;
 
 export class Picker {
     /**
@@ -31,9 +32,11 @@ export class Picker {
             reactive: false,
         });
 
+        const styleClass = Main.getStyleVariant() === 'light'
+            ? 'snap-layouts-picker light' : 'snap-layouts-picker';
         this._root = new St.Widget({
             name: 'snap-layouts-picker',
-            style_class: 'snap-layouts-picker',
+            style_class: styleClass,
             reactive: false,
             x: geometry.x,
             y: geometry.y,
@@ -66,9 +69,10 @@ export class Picker {
             this._root.add_child(thumb);
         }
 
-        const uiGroup = Main.layoutManager.uiGroup;
-        uiGroup.add_child(this._preview);
-        uiGroup.add_child(this._root);
+        // The preview lives among the windows, restacked below the dragged
+        // one on every hover, so it never tints the window being dropped.
+        global.window_group.add_child(this._preview);
+        Main.layoutManager.uiGroup.add_child(this._root);
         this._root.ease({
             opacity: 255,
             duration: FADE_MS,
@@ -98,28 +102,61 @@ export class Picker {
         }
         this._cells.get(key)?.add_style_pseudo_class('hover');
 
+        this._stackPreview();
         if (!preview.visible) {
+            // Grow out of the dragged window, as mutter's tile preview does.
+            const from = this._windowRect(rect) ?? rect;
             preview.remove_all_transitions();
-            preview.set_position(rect.x, rect.y);
-            preview.set_size(rect.width, rect.height);
+            preview.set_position(from.x, from.y);
+            preview.set_size(from.width, from.height);
             preview.opacity = 0;
             preview.show();
-            preview.ease({
-                opacity: 255,
-                duration: PREVIEW_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-        } else {
-            preview.ease({
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-                opacity: 255,
-                duration: PREVIEW_MS,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
         }
+        preview.ease({
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            opacity: 255,
+            duration: PREVIEW_MS,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    _windowActor() {
+        const actor = this._window?.get_compositor_private();
+        return actor?.get_parent() === global.window_group ? actor : null;
+    }
+
+    _stackPreview() {
+        const actor = this._windowActor();
+        if (actor)
+            global.window_group.set_child_below_sibling(this._preview, actor);
+        else
+            global.window_group.set_child_above_sibling(this._preview, null);
+    }
+
+    /**
+     * The dragged window's frame clipped to the monitor holding `rect`.
+     *
+     * @param {{x, y, width, height}} rect zone target rect
+     * @returns {?{x, y, width, height}} null without a usable window
+     */
+    _windowRect(rect) {
+        if (!this._windowActor())
+            return null;
+        const f = this._window.get_frame_rect();
+        const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
+        const m = Main.layoutManager.monitors.find(mon =>
+            cx >= mon.x && cx < mon.x + mon.width &&
+            cy >= mon.y && cy < mon.y + mon.height);
+        const x1 = Math.max(f.x, m?.x ?? -Infinity);
+        const y1 = Math.max(f.y, m?.y ?? -Infinity);
+        const x2 = Math.min(f.x + f.width, m ? m.x + m.width : Infinity);
+        const y2 = Math.min(f.y + f.height, m ? m.y + m.height : Infinity);
+        if (x2 <= x1 || y2 <= y1)
+            return null;
+        return {x: x1, y: y1, width: x2 - x1, height: y2 - y1};
     }
 
     /** Destroy picker and preview actors. Idempotent. */
