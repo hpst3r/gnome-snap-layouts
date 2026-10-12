@@ -67,7 +67,9 @@ if [[ -z ${E2E_INNER:-} ]]; then
             echo '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>'
         } >"$4"
     }
-    write_bus_conf session "unix:dir=$RUN/rt" "$RUN/dbus/services" "$RUN/dbus/session.conf"
+    # Fixed short socket names: unix:dir= appends dbus-XXXXXXXXXX, which
+    # overflows sun_path (107 bytes) for deep checkouts such as worktrees.
+    write_bus_conf session "unix:path=$RUN/rt/bus" "$RUN/dbus/services" "$RUN/dbus/session.conf"
     SYSTEM_SOCK=$RUN/rt/sysbus  # keep short: AF_UNIX paths max 107 bytes
     write_bus_conf system "unix:path=$SYSTEM_SOCK" "" "$RUN/dbus/system.conf"
     dbus-daemon --config-file="$RUN/dbus/system.conf" --nofork --nopidfile \
@@ -100,6 +102,7 @@ if [[ -z ${E2E_INNER:-} ]]; then
         E2E_INNER=1 E2E_RUN="$RUN" E2E_REPO="$REPO" \
         E2E_TIMEOUT="${E2E_TIMEOUT:-240}" \
         E2E_CLIENT_DEBUG="${E2E_CLIENT_DEBUG:-}" E2E_HOLD="${E2E_HOLD:-}" \
+        SNAP_REVIEW="${SNAP_REVIEW:-}" \
         dbus-run-session --config-file="$RUN/dbus/session.conf" \
         -- "$REPO/scripts/e2e.sh" "$@" \
         2>>"$RUN/session.log" || status=$?
@@ -122,7 +125,7 @@ fi
 RUN=$E2E_RUN
 LOG=$RUN/gnome-shell.log
 EXT_SCHEMAS=$RUN/data/gnome-shell/extensions/$UUID/schemas
-DISPLAY_NAME=wl-snap-e2e-$$
+DISPLAY_NAME=wl-$$  # short: $XDG_RUNTIME_DIR/<name> must fit sun_path
 
 # Only enable the extension under test if it actually has an extension.js;
 # otherwise the harness itself (smoke) can still be exercised.
@@ -147,8 +150,13 @@ gsettings set org.gnome.desktop.screensaver lock-enabled false
 GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts gap 0
 GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts debug true
 
+# Review runs (SNAP_REVIEW=1) add a 4K monitor right of the primary one for
+# the HiDPI / multi-monitor PoCs in tests/e2e/review_scenarios.py.
+EXTRA_MONITORS=()
+[[ ${SNAP_REVIEW:-} == 1 ]] && EXTRA_MONITORS=(--virtual-monitor 3840x2160)
+
 gnome-shell --headless --wayland --no-x11 \
-    --virtual-monitor 1920x1080 \
+    --virtual-monitor 1920x1080 "${EXTRA_MONITORS[@]}" \
     --wayland-display "$DISPLAY_NAME" \
     >"$LOG" 2>&1 &
 SHELL_PID=$!

@@ -690,10 +690,19 @@ def sc_gap(ctx):
         ctx.ext_set("gap", "0")
 
 
+# Review PoCs (tests/e2e/review_scenarios.py), only with SNAP_REVIEW=1.
+REVIEW = os.environ.get("SNAP_REVIEW") == "1"
+if REVIEW:
+    sys.path.insert(0, HERE)
+    import review_scenarios  # noqa: E402
+    review_scenarios.register(sys.modules[__name__])
+
+
 # ---------------------------------------------------------------- runner
 def select(names):
     if not names:
-        return [n for n, s in SCENARIOS.items() if "review" not in s["tags"]]
+        return [n for n, s in SCENARIOS.items()
+                if ("review" in s["tags"]) == REVIEW]
     out = []
     for pat in names:
         if pat.startswith("@"):
