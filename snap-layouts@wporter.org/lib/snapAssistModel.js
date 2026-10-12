@@ -2,6 +2,59 @@
 // Pure helpers for Snap Assist (no gi:// or resource:// imports, so they can be
 // unit-tested with `gjs -m` outside the shell).
 
+// Logical px at scale 1 (see assistMetrics()).
+const ZONE_PADDING = 24;
+const SPACING = 16;
+const MIN_THUMB = 160;
+const MAX_THUMB = 720;
+const LABEL_HEIGHT = 28;
+const ICON_SIZE = 20;
+const LARGE_ICON_SIZE = 32;
+const LARGE_ICON_MAX_CANDIDATES = 2;
+const MINIMIZED_ICON_MAX = 128;
+
+/**
+ * Sizes for the Snap Assist thumbnail grid of one zone, in stage px.
+ *
+ * Thumbnails may grow up to the zone's inner width or 720 logical px,
+ * whichever is smaller, and only scroll below 160 logical px. With one or two
+ * candidates the app icon is larger and the title row grows to fit it.
+ * The result's grid options can be passed straight to gridForZone().
+ *
+ * @param {{width: number, height: number}} zoneRect zone size in stage px
+ * @param {number} n number of candidates
+ * @param {number} [scale] theme scale factor
+ * @returns {{padding: number, spacing: number, minThumb: number,
+ *   maxThumb: number, labelHeight: number, iconSize: number}} iconSize is
+ *   logical px (St icon sizes are scaled by the theme), the rest stage px
+ */
+export function assistMetrics(zoneRect, n, scale = 1) {
+    const iconSize = n <= LARGE_ICON_MAX_CANDIDATES ? LARGE_ICON_SIZE : ICON_SIZE;
+    const padding = Math.round(ZONE_PADDING * scale);
+    const innerW = Math.max(0, Math.floor(zoneRect.width - 2 * padding));
+    return {
+        padding,
+        spacing: Math.round(SPACING * scale),
+        minThumb: Math.round(MIN_THUMB * scale),
+        maxThumb: Math.min(innerW, Math.round(MAX_THUMB * scale)),
+        labelHeight: Math.round((LABEL_HEIGHT + iconSize - ICON_SIZE) * scale),
+        iconSize,
+    };
+}
+
+/**
+ * Icon size for a minimized window's thumbnail, which has no live preview.
+ *
+ * @param {number} previewW preview area width in stage px
+ * @param {number} previewH preview area height in stage px
+ * @param {number} [scale] theme scale factor
+ * @returns {number} logical px: half the preview's smaller side, 16–128
+ */
+export function minimizedIconSize(previewW, previewH, scale = 1) {
+    const half = Math.floor(Math.min(previewW, previewH) / scale / 2);
+    return Math.max(16, Math.min(MINIMIZED_ICON_MAX, half));
+}
+
 /**
  * Lay out `n` equally sized thumbnails inside a zone.
  *
@@ -130,8 +183,10 @@ export function fitSize(srcW, srcH, boxW, boxH) {
  * Filter an MRU window list down to Snap Assist candidates, keeping order.
  *
  * Duck-typed so it can be tested with fakes: windows need
- * `get_window_type()`, `is_skip_taskbar()` and `get_monitor()`.
- * Minimized windows are kept (they are unminimized when picked).
+ * `get_window_type()`, `is_skip_taskbar()`, `get_monitor()` and optionally
+ * `get_transient_for()`. Transient windows (dialogs of another window) are
+ * left out, matching the picker's eligibility rule. Minimized windows are
+ * kept (they are unminimized when picked).
  *
  * @param {object[]} windows most recently used first
  * @param {object} opts
@@ -149,6 +204,7 @@ export function selectCandidates(windows, {monitorIndex, normalType, excluded = 
         seen.add(w);
         return w.get_window_type() === normalType &&
             !w.is_skip_taskbar() &&
+            !w.get_transient_for?.() &&
             w.get_monitor() === monitorIndex;
     });
 }

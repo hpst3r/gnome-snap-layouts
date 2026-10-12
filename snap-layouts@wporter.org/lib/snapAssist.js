@@ -13,17 +13,14 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {ensureActorVisibleInScrollView} from 'resource:///org/gnome/shell/misc/animationUtils.js';
 
-import {fitSize, gridForZone, navigateIndex, selectCandidates} from './snapAssistModel.js';
+import {
+    assistMetrics, fitSize, gridForZone, minimizedIconSize, navigateIndex, selectCandidates,
+} from './snapAssistModel.js';
 
 // Logical px; multiplied by the theme scale factor. THUMB_PADDING must match
-// the padding of .snap-layouts-assist-thumb in stylesheet.css.
-const ZONE_PADDING = 16;
-const SPACING = 12;
+// the padding of .snap-layouts-assist-thumb in stylesheet.css. Grid sizes are
+// in assistMetrics() (snapAssistModel.js).
 const THUMB_PADDING = 6;
-const LABEL_HEIGHT = 28;
-const ICON_SIZE = 20;
-const MIN_THUMB = 96;
-const MAX_THUMB = 320;
 const ANIMATION_TIME = 150;
 
 const KEY_DIRECTIONS = new Map([
@@ -119,7 +116,8 @@ class SnapAssist {
         const {x, y, width, height} = this._monitor;
         this._root = new St.Widget({
             name: 'snap-layouts-assist',
-            style_class: 'snap-layouts-assist',
+            style_class: Main.getStyleVariant() === 'light'
+                ? 'snap-layouts-assist light' : 'snap-layouts-assist',
             reactive: true,
             x, y, width, height,
         });
@@ -265,15 +263,9 @@ class SnapAssist {
         const aspect = workArea?.width > 0 && workArea?.height > 0
             ? Math.min(Math.max(workArea.width / workArea.height, 1), 2.4)
             : 16 / 10;
+        const metrics = assistMetrics(rect, candidates.length, scale);
         const grid = gridForZone({x: 0, y: 0, width: rect.width, height: rect.height},
-            candidates.length, {
-                aspect,
-                minThumb: MIN_THUMB * scale,
-                maxThumb: MAX_THUMB * scale,
-                spacing: SPACING * scale,
-                padding: ZONE_PADDING * scale,
-                labelHeight: LABEL_HEIGHT * scale,
-            });
+            candidates.length, {aspect, ...metrics});
         this._cols = Math.max(1, grid.cols);
 
         // The grid lives in a vertical scroll view; it only scrolls when the
@@ -297,11 +289,11 @@ class SnapAssist {
         this._scrollView.set_child(viewport);
         panel.add_child(this._scrollView);
 
-        const spacing = Math.round(SPACING * scale);
+        const {spacing} = metrics;
         candidates.forEach((win, idx) => {
             const col = idx % grid.cols;
             const row = Math.floor(idx / grid.cols);
-            const button = this._buildThumbnail(win, grid, scale);
+            const button = this._buildThumbnail(win, grid, metrics, scale);
             button.set_position(
                 grid.x0 - grid.innerX + col * (grid.thumbW + spacing),
                 offsetY + row * (grid.cellH + spacing));
@@ -311,7 +303,7 @@ class SnapAssist {
         return panel;
     }
 
-    _buildThumbnail(win, grid, scale) {
+    _buildThumbnail(win, grid, metrics, scale) {
         const button = new St.Button({
             name: `snap-layouts-assist-window:${win.get_id()}`,
             style_class: 'snap-layouts-assist-thumb',
@@ -331,10 +323,10 @@ class SnapAssist {
         const app = Shell.WindowTracker.get_default().get_window_app(win);
         const header = new St.BoxLayout({
             style_class: 'snap-layouts-assist-thumb-header',
-            height: Math.round(LABEL_HEIGHT * scale) - Math.round(THUMB_PADDING * scale),
+            height: metrics.labelHeight - Math.round(THUMB_PADDING * scale),
             x_expand: true,
         });
-        header.add_child(this._appIcon(app, ICON_SIZE));
+        header.add_child(this._appIcon(app, metrics.iconSize));
         const label = new St.Label({
             style_class: 'snap-layouts-assist-thumb-title',
             text: win.get_title() || app?.get_name() || '',
@@ -366,8 +358,7 @@ class SnapAssist {
             }));
         } else {
             // Minimized windows have no painted actor; show a large icon.
-            const iconSize = Math.max(16, Math.min(96, Math.floor(Math.min(previewW, previewH) / scale / 2)));
-            preview.set_child(this._appIcon(app, iconSize));
+            preview.set_child(this._appIcon(app, minimizedIconSize(previewW, previewH, scale)));
         }
         box.add_child(preview);
 
@@ -488,7 +479,7 @@ class SnapAssist {
 /**
  * Show Snap Assist for the zones left over after a picker snap.
  *
- * Candidates are the normal, non-skip-taskbar windows on the active
+ * Candidates are the normal, non-transient, non-skip-taskbar windows on the active
  * workspace and `p.monitorIndex` (minimized ones included), most recently
  * used first, excluding `p.window` and windows already placed. The first
  * remaining zone shows a thumbnail grid; picking a window snaps it there via
