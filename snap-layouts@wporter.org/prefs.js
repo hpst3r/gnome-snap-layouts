@@ -157,7 +157,7 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
 
         const snapping = new Adw.PreferencesGroup({title: 'Snapping'});
         snapping.add(spinRow(settings, 'gap', 'Gap', 'Pixels between snapped windows and screen edges', 0, 64));
-        snapping.add(switchRow(settings, 'restore-size-on-drag', 'Restore size on drag out',
+        snapping.add(switchRow(settings, 'restore-size-on-drag', 'Restore size on drag-out',
             'Dragging a snapped window gives it back its previous size'));
         snapping.add(switchRow(settings, 'snap-assist', 'Snap Assist',
             'Offer other windows for the remaining zones after a snap'));

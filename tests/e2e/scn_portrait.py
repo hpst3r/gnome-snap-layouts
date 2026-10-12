@@ -24,8 +24,8 @@ LANDSCAPE = ["halves", "two-thirds-left", "thirds", "quadrants",
 PORTRAIT_LAYOUTS = {
     "v-halves": [(0, 0, 1, 1 / 2), (0, 1 / 2, 1, 1 / 2)],
     "v-thirds": [(0, 0, 1, 1 / 3), (0, 1 / 3, 1, 1 / 3), (0, 2 / 3, 1, 1 / 3)],
-    "v-large-two-small": [(0, 0, 1, 1 / 2), (0, 1 / 2, 1 / 2, 1 / 2),
-                          (1 / 2, 1 / 2, 1 / 2, 1 / 2)],
+    "v-quarter-half-quarter": [(0, 0, 1, 1 / 4), (0, 1 / 4, 1, 1 / 2),
+                               (0, 3 / 4, 1, 1 / 4)],
 }
 PORTRAIT = list(PORTRAIT_LAYOUTS)
 CUSTOM_ANY = [{"id": "e2e-any", "name": "E2E any",
@@ -167,12 +167,12 @@ def sc_portrait_v_thirds(ctx):
             {"x": 1920, "y": 1280, "width": 1080, "height": 640})
 
 
-@portrait("portrait-snap-v-large-two-small")
-def sc_portrait_v_large(ctx):
+@portrait("portrait-snap-v-quarter-half-quarter")
+def sc_portrait_v_qhq(ctx):
     portrait_monitor(ctx)
     win = R.standard_window(ctx)
-    snap_on(ctx, win, 1, "v-large-two-small", 2,
-            {"x": 2460, "y": 960, "width": 540, "height": 960})
+    snap_on(ctx, win, 1, "v-quarter-half-quarter", 1,
+            {"x": 1920, "y": 480, "width": 1080, "height": 960})
 
 
 @portrait("portrait-landscape-unchanged")

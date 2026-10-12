@@ -598,12 +598,14 @@ PREFS_X, PREFS_Y = 2000, 40
 # Window-relative points in the prefs window (measured on
 # review-prefs-open-prefs.png).
 PREFS_POINTS = {
-    "trigger-width+": (593, 153),
-    "gap+": (593, 381),
-    "snap-assist": (588, 491),
-    "thirds": (588, 719),
-    "custom-expander": (602, 994),
-    "custom-text": (350, 1080),
+    # Re-measured after Amendment 3 (General group, orientation switch,
+    # Landscape/Portrait headings) from review-prefs-open-prefs.png.
+    "trigger-width+": (592, 268),
+    "gap+": (592, 499),
+    "snap-assist": (588, 608),
+    "thirds": (588, 948),
+    "custom-expander": (602, 1437),
+    "custom-text": (350, 1523),
 }
 
 

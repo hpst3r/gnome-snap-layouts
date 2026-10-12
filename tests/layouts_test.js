@@ -67,7 +67,7 @@ test('U1 built-ins validate with expected zone counts', () => {
         'quarter-half-quarter': 3,
         'v-halves': 2,
         'v-thirds': 3,
-        'v-large-two-small': 3,
+        'v-quarter-half-quarter': 3,
     };
     eq(BUILTIN_LAYOUTS.map(l => l.id), Object.keys(counts), 'built-in order');
     eq(BUILTIN_LAYOUTS.map(l => l.orientation),
@@ -436,7 +436,7 @@ const PORTRAIT_WORK_AREAS = [
     {x: 0, y: 32, width: 1080, height: 1888},
     {x: 0, y: 0, width: 1200, height: 1920},
 ];
-const PORTRAIT_IDS = ['v-halves', 'v-thirds', 'v-large-two-small'];
+const PORTRAIT_IDS = ['v-halves', 'v-thirds', 'v-quarter-half-quarter'];
 const LANDSCAPE_IDS = BUILTIN_LAYOUTS.filter(l => l.orientation === 'landscape').map(l => l.id);
 const byId = id => BUILTIN_LAYOUTS.find(l => l.id === id);
 
@@ -445,9 +445,9 @@ test('P1 portrait built-ins: zones as in the SPEC, reading order', () => {
     eq(byId('v-halves').zones, [{x: 0, y: 0, w: 1, h: 0.5}, {x: 0, y: 0.5, w: 1, h: 0.5}], 'v-halves');
     eq(byId('v-thirds').zones, [{x: 0, y: 0, w: 1, h: t}, {x: 0, y: t, w: 1, h: t},
         {x: 0, y: 2 / 3, w: 1, h: t}], 'v-thirds');
-    eq(byId('v-large-two-small').zones, [{x: 0, y: 0, w: 1, h: 0.5}, {x: 0, y: 0.5, w: 0.5, h: 0.5},
-        {x: 0.5, y: 0.5, w: 0.5, h: 0.5}], 'v-large-two-small');
-    eq(PORTRAIT_IDS.map(id => byId(id).name), ['Stacked halves', 'Stacked thirds', 'Large + two small'], 'names');
+    eq(byId('v-quarter-half-quarter').zones, [{x: 0, y: 0, w: 1, h: 0.25}, {x: 0, y: 0.25, w: 1, h: 0.5},
+        {x: 0, y: 0.75, w: 1, h: 0.25}], 'v-quarter-half-quarter');
+    eq(PORTRAIT_IDS.map(id => byId(id).name), ['Stacked halves', 'Stacked thirds', 'Stacked centre focus'], 'names');
     for (const id of PORTRAIT_IDS) {
         assert(Object.isFrozen(byId(id)) && Object.isFrozen(byId(id).zones), `${id} frozen`);
         eq(validateLayout(byId(id)).layout?.orientation, 'portrait', `${id} validates as portrait`);
@@ -501,11 +501,11 @@ test('P2 portrait work areas tile exactly (gap 0) and gap 8 separates by 8', () 
         {x: 1920, y: 640, width: 1080, height: 640},
         {x: 1920, y: 1280, width: 1080, height: 640},
     ], 'v-thirds rects');
-    eq(byId('v-large-two-small').zones.map(z => zoneRect(wa, z, 0)), [
-        {x: 1920, y: 0, width: 1080, height: 960},
-        {x: 1920, y: 960, width: 540, height: 960},
-        {x: 2460, y: 960, width: 540, height: 960},
-    ], 'v-large-two-small rects');
+    eq(byId('v-quarter-half-quarter').zones.map(z => zoneRect(wa, z, 0)), [
+        {x: 1920, y: 0, width: 1080, height: 480},
+        {x: 1920, y: 480, width: 1080, height: 960},
+        {x: 1920, y: 1440, width: 1080, height: 480},
+    ], 'v-quarter-half-quarter rects');
     eq(zoneRect(PORTRAIT_WORK_AREAS[1], byId('v-thirds').zones[1], 0),
         {x: 0, y: 661, width: 1080, height: 630}, 'v-thirds:1 with a top bar (rounded edges)');
 });
@@ -560,7 +560,7 @@ test('P5 layoutsForWorkArea', () => {
     eq(ids(layoutsForWorkArea(enabledLayouts([], []), port, true)), PORTRAIT_IDS, 'built-ins only: 3 portrait');
     eq(layoutsForWorkArea(enabledLayouts([], []), land, true).length, 7, 'built-ins only: 7 landscape');
     eq(ids(layoutsForWorkArea(enabledLayouts(['v-thirds'], []), port, true)),
-        ['v-halves', 'v-large-two-small'], 'disabled portrait built-in hidden');
+        ['v-halves', 'v-quarter-half-quarter'], 'disabled portrait built-in hidden');
     eq(layoutsForWorkArea(enabledLayouts(PORTRAIT_IDS, []), port, true), [], 'nothing left -> empty');
     eq(layoutsForWorkArea([], land, false), [], 'empty in, empty out');
     // Layout objects without an orientation (older callers) count as `any`.
@@ -606,7 +606,7 @@ test('P6 portrait pickerGeometry', () => {
     const wa = PORTRAIT_WORK_AREAS[0];
     const g = pickerGeometry(mon, wa, layoutsForWorkArea(enabledLayouts([], []), wa, true));
     eq(g.thumbs.map(t => [t.layoutId, t.width, t.height]),
-        [['v-halves', 99, 176], ['v-thirds', 99, 176], ['v-large-two-small', 99, 176]], 'thumb sizes');
+        [['v-halves', 99, 176], ['v-thirds', 99, 176], ['v-quarter-half-quarter', 99, 176]], 'thumb sizes');
     eq(new Set(g.thumbs.map(t => t.y)).size, 1, 'single row');
     eq(g.height, 2 * 12 + 176, 'picker height');
     // v-thirds cells are stacked with 3 px gutters; the gutter is not a hit.

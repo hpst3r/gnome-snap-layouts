@@ -113,12 +113,12 @@ const PORTRAIT_LAYOUTS = [
         ],
     },
     {
-        id: 'v-large-two-small',
-        name: 'Large + two small',
+        id: 'v-quarter-half-quarter',
+        name: 'Stacked centre focus',
         zones: [
-            {x: 0, y: 0, w: 1, h: 1 / 2},
-            {x: 0, y: 1 / 2, w: 1 / 2, h: 1 / 2},
-            {x: 1 / 2, y: 1 / 2, w: 1 / 2, h: 1 / 2},
+            {x: 0, y: 0, w: 1, h: 1 / 4},
+            {x: 0, y: 1 / 4, w: 1, h: 1 / 2},
+            {x: 0, y: 3 / 4, w: 1, h: 1 / 4},
         ],
     },
 ];
