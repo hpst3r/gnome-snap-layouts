@@ -56,6 +56,7 @@ class SnapAssist {
         this._params = params;
         this._zoneIndex = 0;
         this._placed = new Set([params.window]);
+        this._excluded = new Set(params.excludeWindows ?? []);
         this._gone = new Set();
         this._closed = false;
         this._signals = [];
@@ -192,7 +193,7 @@ class SnapAssist {
         return selectCandidates(windows, {
             monitorIndex: this._params.monitorIndex,
             normalType: Meta.WindowType.NORMAL,
-            excluded: new Set([...this._placed, ...this._gone]),
+            excluded: new Set([...this._placed, ...this._gone, ...this._excluded]),
         });
     }
 
@@ -481,7 +482,8 @@ class SnapAssist {
  *
  * Candidates are the normal, non-transient, non-skip-taskbar windows on the active
  * workspace and `p.monitorIndex` (minimized ones included), most recently
- * used first, excluding `p.window` and windows already placed. The first
+ * used first, excluding `p.window`, `p.excludeWindows` and windows already
+ * placed. The first
  * remaining zone shows a thumbnail grid; picking a window snaps it there via
  * `p.snapWindow`, activates it and moves on to the next zone. Closes when the
  * zones or candidates run out, or on Escape, a click outside the thumbnails,
@@ -493,6 +495,8 @@ class SnapAssist {
  *
  * @param {object} p see docs/SPEC.md "Seam: Snap Assist"
  * @param {Meta.Window} p.window window just snapped (excluded from candidates)
+ * @param {Meta.Window[]} [p.excludeWindows] other windows never offered
+ *   (e.g. ones already filling a zone of the layout)
  * @param {number} p.monitorIndex monitor the zones are on
  * @param {{x: number, y: number, width: number, height: number}} p.workArea
  * @param {Array<{x: number, y: number, width: number, height: number}>} p.zones

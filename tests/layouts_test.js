@@ -5,7 +5,7 @@ import {
     BUILTIN_LAYOUTS, validateLayout, parseCustomLayouts, enabledLayouts,
     zoneRect, inTriggerBand, pickerGeometry, hitTest, pointerInPicker,
     restoreRect, rectsClose, MAX_COLUMNS, workAreaOrientation, layoutsForWorkArea,
-    THUMB_MAX_SIDE,
+    THUMB_MAX_SIDE, rectCoverage, occupiedZoneIndices,
 } from '../snap-layouts@wporter.org/lib/layouts.js';
 import {
     initialDragState, stepDragState, HIDE_DELAY_MS,
@@ -621,6 +621,61 @@ test('P6 portrait pickerGeometry', () => {
     const gs = pickerGeometry({x: 0, y: 0, width: 1000, height: 1000}, {x: 0, y: 0, width: 1000, height: 1000},
         enabledLayouts([], []));
     eq([gs.thumbs[0].width, gs.thumbs[0].height], [112, 112], 'square thumb');
+});
+
+test('rectCoverage / occupiedZoneIndices', () => {
+    const wa = {x: 0, y: 32, width: 1920, height: 1048};
+    const quads = BUILTIN_LAYOUTS.find(l => l.id === 'quadrants').zones.map(z => zoneRect(wa, z, 0));
+    const [tl, tr] = quads;
+    const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+    // Exact fit.
+    let c = rectCoverage(tr, {...tr});
+    assert(near(c.ofZone, 1) && near(c.ofFrame, 1), 'exact fit covers fully');
+    eq([...occupiedZoneIndices(quads, [{...tr}])], [1], 'exact fit occupies quadrants:1');
+
+    // Terminal grid: a few px short on the right and bottom, ≥ 90 % of the zone.
+    const term = {x: tr.x, y: tr.y, width: tr.width - 7, height: tr.height - 15};
+    c = rectCoverage(tr, term);
+    assert(c.ofZone >= 0.9 && c.ofZone < 1 && near(c.ofFrame, 1), `terminal shortfall (${c.ofZone})`);
+    eq([...occupiedZoneIndices(quads, [term])], [1], 'terminal-grid window occupies its zone');
+    // A shortfall beyond 10 % is not enough.
+    const small = {x: tr.x, y: tr.y, width: Math.round(tr.width * 0.8), height: tr.height};
+    eq([...occupiedZoneIndices(quads, [small])], [], '80 % wide window does not occupy');
+
+    // Half overlapping two zones: each gets only half.
+    const straddle = {x: tl.x + tl.width / 2, y: tl.y, width: tl.width, height: tl.height};
+    c = rectCoverage(tl, straddle);
+    assert(near(c.ofZone, 0.5) && near(c.ofFrame, 0.5), 'half overlap is 50 %');
+    eq([...occupiedZoneIndices(quads, [straddle])], [], 'half overlap occupies nothing');
+
+    // Slightly larger than the zone (within 10 %): still occupying.
+    const big = {x: tr.x - 20, y: tr.y - 10, width: tr.width + 40, height: tr.height + 20};
+    c = rectCoverage(tr, big);
+    assert(near(c.ofZone, 1) && c.ofFrame >= 0.9 && c.ofFrame < 1, `slightly larger (${c.ofFrame})`);
+    eq([...occupiedZoneIndices(quads, [big])], [1], 'slightly larger window occupies');
+    // Much larger (half the screen tall) spills out too far.
+    const tall = {x: tr.x, y: tr.y, width: tr.width, height: tr.height * 2};
+    eq([...occupiedZoneIndices(quads, [tall])], [], 'window twice the zone does not occupy');
+
+    // Maximized covers every quarter but only 25 % of it lies in each.
+    c = rectCoverage(tl, wa);
+    assert(near(c.ofZone, 1) && c.ofFrame < 0.9, `maximized ofFrame ${c.ofFrame}`);
+    eq([...occupiedZoneIndices(quads, [{...wa}])], [], 'maximized occupies no quarter');
+    const halves = BUILTIN_LAYOUTS[0].zones.map(z => zoneRect(wa, z, 0));
+    eq([...occupiedZoneIndices(halves, [{...wa}])], [], 'maximized occupies no half');
+
+    // Several frames, several zones; threshold parameter.
+    eq([...occupiedZoneIndices(quads, [tl, quads[3]])].sort(), [0, 3], 'two occupied');
+    eq([...occupiedZoneIndices(quads, [small], 0.75)], [1], 'lower threshold');
+
+    // Empty inputs.
+    eq([...occupiedZoneIndices([], [tl])], [], 'no zones');
+    eq([...occupiedZoneIndices(quads, [])], [], 'no frames');
+    eq([...occupiedZoneIndices(null, undefined)], [], 'missing arrays');
+    eq(rectCoverage(tl, {x: 5000, y: 0, width: 10, height: 10}), {ofZone: 0, ofFrame: 0}, 'disjoint');
+    eq(rectCoverage(tl, {x: tl.x, y: tl.y, width: 0, height: 0}), {ofZone: 0, ofFrame: 0}, 'empty frame');
+    eq(rectCoverage({x: 0, y: 0, width: 0, height: 0}, tl), {ofZone: 0, ofFrame: 0}, 'empty zone');
 });
 
 print(`${passes} assertions passed, ${failures} failed`);
