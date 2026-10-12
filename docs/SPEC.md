@@ -261,7 +261,7 @@ unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
   |---|---|---|
   | `v-halves` | Stacked halves | (0,0,1,½) (0,½,1,½) |
   | `v-thirds` | Stacked thirds | (0,0,1,⅓) (0,⅓,1,⅓) (0,⅔,1,⅓) |
-  | `v-large-two-small` | Large + two small | (0,0,1,½) (0,½,½,½) (½,½,½,½) — the 90° rotation of `half-left-quarters-right` |
+  | `v-quarter-half-quarter` | Stacked centre focus | (0,0,1,¼) (0,¼,1,½) (0,¾,1,¼) — the vertical `quarter-half-quarter`, as on Windows 11 portrait (user decision, supersedes the first draft `v-large-two-small`) |
 
 - Custom layouts may set `orientation`; missing → `any`; any other value is a
   validation error for that entry.
