@@ -36,8 +36,8 @@ non-zero on failure via `(await import('system')).default.exit(1)`) must prove:
 - U5 inTriggerBand boundaries (just inside/outside each edge; pointer above
   work area over the panel counts).
 - U6 pickerGeometry: thumbs never overlap, cells lie inside their thumb,
-  picker horizontally centred on monitor, ≤4 columns, scale 2 doubles sizes;
-  hitTest returns the right cell at each cell centre and null in gutters and
+  picker horizontally centered on monitor, ≤4 columns, scale 2 doubles sizes;
+  hitTest returns the right cell at each cell center and null in gutters and
   outside; pointerInPicker margin.
 - U7 restoreRect keeps the pointer's relative x and stays inside the work area.
 

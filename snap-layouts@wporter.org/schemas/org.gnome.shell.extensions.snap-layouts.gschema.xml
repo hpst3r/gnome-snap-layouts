@@ -4,7 +4,7 @@
     <key name="trigger-width" type="i">
       <range min="10" max="100"/>
       <default>40</default>
-      <summary>Trigger band width (% of monitor width, centred)</summary>
+      <summary>Trigger band width (% of monitor width, centered)</summary>
     </key>
     <key name="trigger-height" type="i">
       <range min="8" max="200"/>

@@ -32,7 +32,7 @@ export class Tiler {
      * Snap a window to a rect: windows maximized or tiled by mutter are
      * unmaximized first (which also clears mutter's tile mode) and snapped
      * once the client has applied that, so their normal size can be
-     * remembered; windows that cannot be resized are only moved, centred in
+     * remembered; windows that cannot be resized are only moved, centered in
      * the rect. Remembers the pre-snap size for restore-on-drag-out.
      *
      * @param {Meta.Window} window

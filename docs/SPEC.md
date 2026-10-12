@@ -17,7 +17,7 @@ UUID `snap-layouts@wporter.org`. License AGPL-3.0-or-later. Target: GNOME Shell
    - Trigger band: `y < workArea.y + trigger-height` and
      `|x − (monitor.x + monitor.width/2)| ≤ monitor.width × trigger-width% / 2`.
      (y may be above workArea.y, i.e. over the top panel.)
-2. **Picker.** A translucent rounded panel, horizontally centred on the
+2. **Picker.** A translucent rounded panel, horizontally centered on the
    monitor, top edge at `workArea.y + 8` logical px. It contains one
    **thumbnail** per enabled layout, arranged in a grid of at most 4 columns
    (row-major, built-in order then custom). Each thumbnail has the monitor's
@@ -36,7 +36,7 @@ UUID `snap-layouts@wporter.org`. License AGPL-3.0-or-later. Target: GNOME Shell
    snap the window to `zoneRect(workArea, zone, gap)`. Unmaximize first if
    `is_maximized()` (Mutter 18: `maximize()`/`unmaximize()` take NO flags).
    Apply `move_resize_frame(true, x, y, w, h)` from an idle/`Meta.later`
-   after the grab ends. If `!window.allows_resize()`, only move it centred in
+   after the grab ends. If `!window.allows_resize()`, only move it centered in
    the zone. If no cell is hovered, do nothing (Mutter's own edge tiling and
    top-edge maximize keep working untouched; never change
    `org.gnome.mutter edge-tiling`). Picker and preview are destroyed/hidden on
@@ -71,7 +71,7 @@ UUID `snap-layouts@wporter.org`. License AGPL-3.0-or-later. Target: GNOME Shell
 
 | key | type | default | range/notes |
 |---|---|---|---|
-| `trigger-width` | i | 40 | 10–100 (% of monitor width, centred) |
+| `trigger-width` | i | 40 | 10–100 (% of monitor width, centered) |
 | `trigger-height` | i | 8 (Amendment 2) | 8–200 (px below work-area top) |
 | `show-delay-ms` | i | 80 | 0–1000 |
 | `gap` | i | 0 | 0–64 (px between zones and at work-area edges) |
@@ -98,7 +98,7 @@ must number 1–12. Built-ins, in picker order:
 | `quadrants` | Quadrants | 2×2 |
 | `half-left-quarters-right` | Half + quarters | left ½ full height; right ½ split into top/bottom |
 | `quarters-left-half-right` | Quarters + half | left ½ split top/bottom; right ½ full height |
-| `quarter-half-quarter` | Centre focus | ¼ \| ½ \| ¼ |
+| `quarter-half-quarter` | Center focus | ¼ \| ½ \| ¼ |
 
 Exports (exact names; the shell code and tests depend on them):
 
@@ -261,7 +261,7 @@ unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
   |---|---|---|
   | `v-halves` | Stacked halves | (0,0,1,½) (0,½,1,½) |
   | `v-thirds` | Stacked thirds | (0,0,1,⅓) (0,⅓,1,⅓) (0,⅔,1,⅓) |
-  | `v-quarter-half-quarter` | Stacked centre focus | (0,0,1,¼) (0,¼,1,½) (0,¾,1,¼) — the vertical `quarter-half-quarter`, as on Windows 11 portrait (user decision, supersedes the first draft `v-large-two-small`) |
+  | `v-quarter-half-quarter` | Stacked center focus | (0,0,1,¼) (0,¼,1,½) (0,¾,1,¼) — the vertical `quarter-half-quarter`, as on Windows 11 portrait (user decision, supersedes the first draft `v-large-two-small`) |
 
 - Custom layouts may set `orientation`; missing → `any`; any other value is a
   validation error for that entry.

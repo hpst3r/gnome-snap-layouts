@@ -123,7 +123,7 @@ def snap_on(ctx, win, mon_index, layout, zone, expect_fixed=None):
         names = cell_names(ctx)
         ctx.release()
         raise Fail("cell %s not offered; cells: %s" % (name, names))
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     try:
         ctx.wait_shown("snap-layouts-preview", 1.0)

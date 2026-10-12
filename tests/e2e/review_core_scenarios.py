@@ -179,7 +179,7 @@ def snap_loose(ctx, win, layout, zone_index):
     ctx.glide(mon["width"] / 2, 10, steps=25)
     ctx.wait_shown("snap-layouts-picker", 1.5)
     cell = ctx.actor("snap-layouts-zone:%s:%d" % (layout, zone_index))
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     expect_frame(ctx, win, zone(ctx, layout, zone_index),
@@ -191,7 +191,7 @@ def pick_in_assist(ctx, win):
     thumb = R.wait_for(lambda: ctx.shown(name), 1.5, 0.05, name)
     time.sleep(0.3)
     thumb = ctx.shown(name) or thumb
-    ctx.click(*R.centre(thumb))
+    ctx.click(*R.center(thumb))
 
 
 # ------------------------------------------------------------ drag edge cases
@@ -304,20 +304,20 @@ def sc_assist_maximized(ctx):
 
 @review("review-nonresizable")
 def sc_nonresizable(ctx):
-    """Non-resizable window: moved centred in the zone, size kept."""
+    """Non-resizable window: moved centered in the zone, size kept."""
     win, _ = spawn_custom(ctx, "fixed", "--fixed", width=600, height=400)
     win = ctx.place(win, 200, 250, win["frame"]["width"], win["frame"]["height"])
     f0 = win["frame"]
     ctx.drag_to_picker(win)
     cell = ctx.actor("snap-layouts-zone:halves:1")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     z = zone(ctx, "halves", 1)
     exp = {"x": R.jround(z["x"] + (z["width"] - f0["width"]) / 2),
            "y": R.jround(z["y"] + (z["height"] - f0["height"]) / 2),
            "width": f0["width"], "height": f0["height"]}
-    expect_frame(ctx, win, exp, "fixed-size window centred in halves:1")
+    expect_frame(ctx, win, exp, "fixed-size window centered in halves:1")
 
 
 @review("review-min-size-larger-than-zone")
@@ -328,7 +328,7 @@ def sc_min_size(ctx):
     win = ctx.place(win, 100, 150, win["frame"]["width"], win["frame"]["height"])
     ctx.drag_to_picker(win)
     cell = ctx.actor("snap-layouts-zone:quadrants:3")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     time.sleep(1.0)
@@ -539,7 +539,7 @@ def sc_settings_mid_drag(ctx):
     win = R.standard_window(ctx)
     ctx.drag_to_picker(win)
     cell = ctx.actor("snap-layouts-zone:thirds:2")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.ext_set("disabled-layouts", "['halves']")
     try:
@@ -577,7 +577,7 @@ def sc_mm_snap(ctx):
         ctx.release()
         raise Fail("picker %s not on monitor 1 %s" % (R.fmt_rect(picker), R.fmt_rect(r)))
     cell = ctx.actor("snap-layouts-zone:halves:1")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     expect_frame(ctx, win, zone(ctx, "halves", 1, mon=1), "halves:1 on monitor 1")
@@ -603,7 +603,7 @@ def sc_mm_cross(ctx):
         raise Fail("after crossing, pickers at %s; expected one on monitor 1"
                    % [R.fmt_rect(p) for p in ps])
     cell = ctx.actor("snap-layouts-zone:quadrants:0")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     expect_frame(ctx, win, zone(ctx, "quadrants", 0, mon=1), "quadrants:0 on monitor 1")
@@ -616,7 +616,7 @@ def sc_mm_restore(ctx):
     win = R.standard_window(ctx)
     drag_to_picker_on(ctx, win, m1)
     cell = ctx.actor("snap-layouts-zone:halves:0")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     time.sleep(0.15)
     ctx.release()
     expect_frame(ctx, win, zone(ctx, "halves", 0, mon=1), "halves:0 on monitor 1")

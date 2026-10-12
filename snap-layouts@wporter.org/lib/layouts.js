@@ -84,7 +84,7 @@ const LANDSCAPE_LAYOUTS = [
     },
     {
         id: 'quarter-half-quarter',
-        name: 'Centre focus',
+        name: 'Center focus',
         zones: [
             {x: 0, y: 0, w: 1 / 4, h: 1},
             {x: 1 / 4, y: 0, w: 1 / 2, h: 1},
@@ -114,7 +114,7 @@ const PORTRAIT_LAYOUTS = [
     },
     {
         id: 'v-quarter-half-quarter',
-        name: 'Stacked centre focus',
+        name: 'Stacked center focus',
         zones: [
             {x: 0, y: 0, w: 1, h: 1 / 4},
             {x: 0, y: 1 / 4, w: 1, h: 1 / 2},
@@ -308,8 +308,8 @@ export function inTriggerBand(monitor, workArea, px, py, {triggerWidthPct, trigg
         return false;
     if (py >= workArea.y + triggerHeight)
         return false;
-    const centre = monitor.x + monitor.width / 2;
-    return Math.abs(px - centre) <= monitor.width * triggerWidthPct / 100 / 2;
+    const center = monitor.x + monitor.width / 2;
+    return Math.abs(px - center) <= monitor.width * triggerWidthPct / 100 / 2;
 }
 
 /**

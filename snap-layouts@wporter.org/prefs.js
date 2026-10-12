@@ -148,9 +148,9 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
 
         const trigger = new Adw.PreferencesGroup({
             title: 'Trigger',
-            description: 'Drag a window into this band at the top centre of a monitor to show the layout picker',
+            description: 'Drag a window into this band at the top center of a monitor to show the layout picker',
         });
-        trigger.add(spinRow(settings, 'trigger-width', 'Trigger width', 'Percent of the monitor width, centred', 10, 100));
+        trigger.add(spinRow(settings, 'trigger-width', 'Trigger width', 'Percent of the monitor width, centered', 10, 100));
         trigger.add(spinRow(settings, 'trigger-height', 'Trigger height', 'Pixels below the top of the work area', 8, 200));
         trigger.add(spinRow(settings, 'show-delay-ms', 'Show delay', 'Milliseconds in the band before the picker appears', 0, 1000));
         page.add(trigger);

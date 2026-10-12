@@ -44,7 +44,7 @@ def switch_checked(ctx, key):
 
 def open_menu(ctx):
     button = ctx.wait_shown(NAME, 1.0)
-    ctx.click(*R.centre(button))
+    ctx.click(*R.center(button))
     try:
         ctx.wait_shown(ITEM + "settings", 1.0)
     except R.ScenarioFailure:

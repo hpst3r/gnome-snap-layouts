@@ -48,17 +48,17 @@ Scenarios (contract names/geometry from docs/SPEC.md):
 - `smoke` (no dependency on the extension's features): one client window;
   press on its headerbar, drag 300 px right/150 px down, release; assert
   frame moved by ≈ that delta. PROVE THIS ONE PASSES.
-- `picker-shows`: drag a window's headerbar to top centre (x = monitor
-  centre, y = 10), wait ≤1 s for actor `snap-layouts-picker` visible; move
-  away to (centre, 500) and assert it hides within 1 s; release.
+- `picker-shows`: drag a window's headerbar to top center (x = monitor
+  center, y = 10), wait ≤1 s for actor `snap-layouts-picker` visible; move
+  away to (center, 500) and assert it hides within 1 s; release.
 - `snap-<layout>-<zone>` for: halves:0, halves:1, quadrants:0..3,
   half-left-quarters-right:1, two-thirds-left:0, thirds:2,
-  quarter-half-quarter:1: drag to top centre, wait for picker, move smoothly
-  to the centre of `snap-layouts-zone:<id>:<i>` (from FindActors), assert
+  quarter-half-quarter:1: drag to top center, wait for picker, move smoothly
+  to the center of `snap-layouts-zone:<id>:<i>` (from FindActors), assert
   `snap-layouts-preview` visible, screenshot, release, assert the window frame
   equals the zone rect computed from the work area with gap 0 (compute it in
   Python by the SPEC zoneRect rule, ±2 px) and the picker is gone.
-- `no-zone-no-snap`: show picker, then release at (centre, 600): frame not a
+- `no-zone-no-snap`: show picker, then release at (center, 600): frame not a
   zone rect; picker gone.
 - `restore-on-drag-out`: snap to halves:0, then drag the headerbar down
   200 px; assert width/height return to the pre-snap size (±2 px).

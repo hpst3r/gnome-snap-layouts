@@ -196,7 +196,7 @@ def picker_shot(ctx, scheme, tag):
     idle = ctx.screenshot(tag + "-idle")
     cell = ctx.actor("snap-layouts-zone:halves:0")
     other = ctx.actor("snap-layouts-zone:halves:1")
-    ctx.glide(*R.centre(cell), steps=10)
+    ctx.glide(*R.center(cell), steps=10)
     settle()
     hover = ctx.screenshot(tag + "-hover")
     pseudo = ctx.actor("snap-layouts-zone:halves:0")["pseudoClass"]
@@ -210,8 +210,8 @@ def picker_shot(ctx, scheme, tag):
         return {}
     bg = pixel(idle, picker["x"] + 4, picker["y"] + picker["height"] / 2)
     outside = pixel(idle, picker["x"] - 20, picker["y"] + picker["height"] / 2)
-    c_idle = pixel(idle, *R.centre(other))
-    c_hover = pixel(hover, *R.centre(cell))
+    c_idle = pixel(idle, *R.center(other))
+    c_hover = pixel(hover, *R.center(cell))
     m = {
         "scheme": scheme,
         "picker_bg": bg, "wallpaper": outside,
@@ -242,7 +242,7 @@ def sc_picker_light(ctx):
 
 @review("review-top-edge-overlap", "info", "visual")
 def sc_top_edge(ctx):
-    """Pointer on the top bar at the centre: picker and Mutter's own
+    """Pointer on the top bar at the center: picker and Mutter's own
     top-edge maximize preview are both shown."""
     win = R.standard_window(ctx)
     mon = ctx.monitor()["rect"]
@@ -252,7 +252,7 @@ def sc_top_edge(ctx):
     ctx.screenshot("top-edge")
     ctx.release()
     f = ctx.wait_stable(win["id"])
-    ctx.notes.append("released on top bar centre: maximized=%s frame %s"
+    ctx.notes.append("released on top bar center: maximized=%s frame %s"
                      % (ctx.window(win["id"])["is_maximized"], R.fmt_rect(f)))
 
 
@@ -321,7 +321,7 @@ def sc_preview_stacking(ctx):
     ref_px = pixel(ref, f0["x"] + ox, f0["y"] + oy)
     ctx.drag_to_picker(win)
     cell = ctx.actor("snap-layouts-zone:halves:0")
-    ctx.glide(*R.centre(cell), steps=15)
+    ctx.glide(*R.center(cell), steps=15)
     settle()
     shot = ctx.screenshot("hover")
     f1 = ctx.window(win["id"])["frame"]
@@ -445,7 +445,7 @@ def sc_assist_quadrants(ctx):
 def sc_layout_settings(ctx):
     """disabled-layouts and custom-layouts reach the picker on the next drag
     (verification; expected to pass)."""
-    custom = json.dumps([{"id": "wide-centre", "name": "Wide centre",
+    custom = json.dumps([{"id": "wide-center", "name": "Wide center",
                           "zones": [{"x": 0.1, "y": 0, "w": 0.8, "h": 1}]}])
     ctx.ext_set("disabled-layouts", "['thirds', 'quadrants']")
     ctx.ext_set("custom-layouts", custom)
@@ -460,7 +460,7 @@ def sc_layout_settings(ctx):
         ctx.notes.append("picker layouts: %s" % names)
         if "thirds" in names or "quadrants" in names:
             fail("disabled layouts still offered: %s" % names)
-        if "wide-centre" not in names:
+        if "wide-center" not in names:
             fail("custom layout missing: %s" % names)
     finally:
         ctx.ext_set("disabled-layouts", "[]")
@@ -496,7 +496,7 @@ def sc_hidpi(ctx):
         picker = ctx.wait_shown("snap-layouts-picker", 1.0)
         settle()
         cell = ctx.actor("snap-layouts-zone:halves:1")
-        ctx.glide(*R.centre(cell), steps=10)
+        ctx.glide(*R.center(cell), steps=10)
         settle()
         shot = ctx.screenshot("picker")
         crop(shot, hi["rect"], "mon")
@@ -676,7 +676,7 @@ def sc_prefs_controls(ctx):
 @review("review-top-edge-maximize", "info", "trigger")
 def sc_top_edge_maximize(ctx):
     """SPEC: Mutter's top-edge maximize keeps working. Release a drag with
-    the pointer on the top bar at the monitor centre (picker shown, no cell
+    the pointer on the top bar at the monitor center (picker shown, no cell
     hovered), with the extension enabled, then disabled, and compare."""
     mon = ctx.monitor()["rect"]
     out = {}
@@ -710,5 +710,5 @@ def sc_top_edge_maximize(ctx):
                      % (out[True], out[False]))
     if out[False] is True and out[True] is not True:
         fail("top-edge maximize broken by the extension: released on the "
-             "top bar centre -> maximized=%s (extension disabled: %s)"
+             "top bar center -> maximized=%s (extension disabled: %s)"
              % (out[True], out[False]))

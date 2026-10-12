@@ -1,7 +1,7 @@
 {
   "uuid": "snap-layouts@wporter.org",
   "name": "Snap Layouts",
-  "description": "Windows 11-style snap layouts: drag a window to the top centre of the screen and drop it onto a layout zone.",
+  "description": "Windows 11-style snap layouts: drag a window to the top center of the screen and drop it onto a layout zone.",
   "shell-version": ["50"],
   "settings-schema": "org.gnome.shell.extensions.snap-layouts",
   "url": "https://github.com/hpst3r/gnome-snap-layouts",

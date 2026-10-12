@@ -62,7 +62,7 @@ export function minimizedIconSize(previewW, previewH, scale = 1) {
  * where the preview area `thumbW × thumbH` has the requested aspect ratio
  * (width / height). The largest thumbnail width ≤ `maxThumb` for which all
  * `n` cells fit inside the zone (minus `padding` on every side) wins; ties go
- * to fewer columns. The grid is centred in the zone.
+ * to fewer columns. The grid is centered in the zone.
  *
  * Tiny zones: if the best fitting width is below `minThumb`, thumbnails keep
  * `minThumb` width (or the zone's inner width if narrower), as many columns as

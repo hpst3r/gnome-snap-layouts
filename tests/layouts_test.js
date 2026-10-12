@@ -208,8 +208,8 @@ test('U5 inTriggerBand boundaries', () => {
     const mon = {x: 0, y: 0, width: 1920, height: 1080};
     const wa = {x: 0, y: 32, width: 1920, height: 1048};
     const opts = {triggerWidthPct: 40, triggerHeight: 48};
-    // half-width = 1920 * 0.4 / 2 = 384 around centre 960 -> [576, 1344]
-    assert(inTriggerBand(mon, wa, 960, 40, opts), 'centre');
+    // half-width = 1920 * 0.4 / 2 = 384 around center 960 -> [576, 1344]
+    assert(inTriggerBand(mon, wa, 960, 40, opts), 'center');
     assert(inTriggerBand(mon, wa, 576, 40, opts), 'left edge inclusive');
     assert(!inTriggerBand(mon, wa, 575, 40, opts), 'just left of band');
     assert(inTriggerBand(mon, wa, 1344, 40, opts), 'right edge inclusive');
@@ -222,8 +222,8 @@ test('U5 inTriggerBand boundaries', () => {
 
     const mon2 = {x: 1920, y: 0, width: 1366, height: 768};
     const wa2 = {x: 1920, y: 0, width: 1366, height: 768};
-    // centre 2603, half-width 273.2
-    assert(inTriggerBand(mon2, wa2, 2603, 5, opts), 'second monitor centre');
+    // center 2603, half-width 273.2
+    assert(inTriggerBand(mon2, wa2, 2603, 5, opts), 'second monitor center');
     assert(inTriggerBand(mon2, wa2, 2603 - 273, 5, opts), 'second monitor left inside');
     assert(!inTriggerBand(mon2, wa2, 2603 - 274, 5, opts), 'second monitor left outside');
     assert(!inTriggerBand(mon2, wa2, 960, 5, opts), 'pointer on other monitor');
@@ -237,7 +237,7 @@ test('U6 pickerGeometry and hitTest', () => {
     const g = pickerGeometry(mon, wa, layouts);
     eq(g.thumbs.length, layouts.length, 'one thumb per layout');
     eq(g.y, wa.y + 8, 'top edge at workArea.y + 8');
-    assert(Math.abs(g.x + g.width / 2 - (mon.x + mon.width / 2)) <= 0.5, 'horizontally centred');
+    assert(Math.abs(g.x + g.width / 2 - (mon.x + mon.width / 2)) <= 0.5, 'horizontally centered');
     const cols = new Set(g.thumbs.map(t => t.x)).size;
     assert(cols <= MAX_COLUMNS, `≤4 columns (${cols})`);
     eq(g.thumbs[0].width, 112, 'base thumb width');
@@ -254,7 +254,7 @@ test('U6 pickerGeometry and hitTest', () => {
             eq(intersection(asRect(t), asRect(g.thumbs[j])), 0, `thumbs ${i},${j} disjoint`);
         for (const c of t.cells) {
             assert(containsRect(t, c), `thumb ${i} cell ${c.zoneIndex} inside thumb`);
-            // Hit at the cell centre.
+            // Hit at the cell center.
             eq(hitTest(g, c.x + c.width / 2, c.y + c.height / 2),
                 {layoutIndex: i, layoutId: t.layoutId, zoneIndex: c.zoneIndex},
                 `hit ${t.layoutId}:${c.zoneIndex}`);
@@ -286,12 +286,12 @@ test('U6 pickerGeometry and hitTest', () => {
     eq(g2.height, g.height * 2, 'scale 2 height');
     eq(g2.thumbs[0].width, 224, 'scale 2 thumb width');
     assert(Math.abs(g2.thumbs[0].cells[0].width - 2 * g.thumbs[0].cells[0].width) < 1.01, 'scale 2 cell width');
-    assert(Math.abs(g2.x + g2.width / 2 - 960) <= 0.5, 'scale 2 centred');
+    assert(Math.abs(g2.x + g2.width / 2 - 960) <= 0.5, 'scale 2 centered');
 
     // Second monitor, fewer layouts than columns.
     const mon2 = {x: 1920, y: 0, width: 1366, height: 768};
     const g3 = pickerGeometry(mon2, mon2, layouts.slice(0, 2));
-    assert(Math.abs(g3.x + g3.width / 2 - (1920 + 683)) <= 0.5, 'centred on second monitor');
+    assert(Math.abs(g3.x + g3.width / 2 - (1920 + 683)) <= 0.5, 'centered on second monitor');
     eq(g3.y, 8, 'second monitor top');
     eq(new Set(g3.thumbs.map(t => t.y)).size, 1, 'single row');
 
@@ -447,7 +447,7 @@ test('P1 portrait built-ins: zones as in the SPEC, reading order', () => {
         {x: 0, y: 2 / 3, w: 1, h: t}], 'v-thirds');
     eq(byId('v-quarter-half-quarter').zones, [{x: 0, y: 0, w: 1, h: 0.25}, {x: 0, y: 0.25, w: 1, h: 0.5},
         {x: 0, y: 0.75, w: 1, h: 0.25}], 'v-quarter-half-quarter');
-    eq(PORTRAIT_IDS.map(id => byId(id).name), ['Stacked halves', 'Stacked thirds', 'Stacked centre focus'], 'names');
+    eq(PORTRAIT_IDS.map(id => byId(id).name), ['Stacked halves', 'Stacked thirds', 'Stacked center focus'], 'names');
     for (const id of PORTRAIT_IDS) {
         assert(Object.isFrozen(byId(id)) && Object.isFrozen(byId(id).zones), `${id} frozen`);
         eq(validateLayout(byId(id)).layout?.orientation, 'portrait', `${id} validates as portrait`);
@@ -580,7 +580,7 @@ test('P6 portrait pickerGeometry', () => {
                 const g = pickerGeometry(mon2, wa, layouts, {scale, triggerHeight: 8});
                 eq(g.thumbs.length, layouts.length, `${tag}: one thumb per layout`);
                 eq(g.y, wa.y + 8 + 8 * scale, `${tag}: top edge`);
-                assert(Math.abs(g.x + g.width / 2 - (mon2.x + mon2.width / 2)) <= 0.5, `${tag}: centred`);
+                assert(Math.abs(g.x + g.width / 2 - (mon2.x + mon2.width / 2)) <= 0.5, `${tag}: centered`);
                 assert(g.x >= mon2.x && g.x + g.width <= mon2.x + mon2.width, `${tag}: inside monitor`);
                 const asRect = t => ({x: t.x, y: t.y, width: t.width, height: t.height});
                 for (const [i, t] of g.thumbs.entries()) {

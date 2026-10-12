@@ -1,7 +1,7 @@
 # gnome-snap-layouts
 
 Windows 11–style snap layouts for GNOME Shell 50. Drag a window towards the
-top centre of a monitor, a layout picker drops down, release over a zone.
+top center of a monitor, a layout picker drops down, release over a zone.
 
 Status: in development. See `docs/SPEC.md`.
 

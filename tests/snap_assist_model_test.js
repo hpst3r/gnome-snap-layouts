@@ -69,10 +69,10 @@ for (const zone of zones) {
             check(inside(r, padded), `${tag}: cell ${JSON.stringify(r)} inside zone`);
         for (const v of [g.cols, g.rows, g.thumbW, g.thumbH, g.x0, g.y0])
             check(Number.isInteger(v), `${tag}: integer output`);
-        // Centred: equal margins (±1) on both sides.
+        // Centered: equal margins (±1) on both sides.
         const left = g.x0 - padded.x;
         const right = padded.x + padded.width - (g.x0 + g.contentWidth);
-        check(Math.abs(left - right) <= 1, `${tag}: horizontally centred`);
+        check(Math.abs(left - right) <= 1, `${tag}: horizontally centered`);
     }
 }
 

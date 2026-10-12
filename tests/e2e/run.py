@@ -106,7 +106,7 @@ def fmt_rect(r):
     return "%d,%d %dx%d" % (r["x"], r["y"], r["width"], r["height"])
 
 
-def centre(r):
+def center(r):
     return r["x"] + r["width"] / 2, r["y"] + r["height"] / 2
 
 
@@ -453,7 +453,7 @@ class Context:
             self.release()
             raise ScenarioFailure("cell %s not found; cells: %s"
                                   % (cell_name, names))
-        cx, cy = centre(cell)
+        cx, cy = center(cell)
         self.glide(cx, cy, steps=20)
         time.sleep(0.1)
         try:
@@ -574,7 +574,7 @@ def sc_no_zone(ctx):
                 raise ScenarioFailure("window snapped to %s:%d without a "
                                       "hovered zone" % (lid, i))
     if w["is_maximized"]:
-        raise ScenarioFailure("window maximized on release at (centre, 600)")
+        raise ScenarioFailure("window maximized on release at (center, 600)")
     if (f["width"], f["height"]) != (800, 500):
         raise ScenarioFailure("window size changed to %dx%d"
                               % (f["width"], f["height"]))
@@ -639,7 +639,7 @@ def sc_snap_assist(ctx):
     wid, thumb = next(iter(thumbs.items()))
     time.sleep(0.3)  # let the open animation finish before clicking
     thumb = ctx.shown(thumb["name"]) or thumb
-    ctx.click(*centre(thumb))
+    ctx.click(*center(thumb))
     expected = zone_rect(ctx.work_area(), LAYOUTS["halves"][1], 0)
     try:
         wait_for(lambda: rects_close(ctx.window(wid)["frame"], expected),

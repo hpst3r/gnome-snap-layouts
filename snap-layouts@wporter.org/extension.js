@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Snap Layouts: drag a window to the top centre of a monitor, drop it onto a
+// Snap Layouts: drag a window to the top center of a monitor, drop it onto a
 // zone of the layout picker.
 
 import GLib from 'gi://GLib';
