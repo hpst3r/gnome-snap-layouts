@@ -340,6 +340,14 @@ used. Relax whatever else is necessary (standard session service
 activation on the private bus; host system bus only if an essential app
 path needs it — document why).
 
+Implemented: standard session service activation on the private session
+bus; `XDG_CURRENT_DESKTOP=GNOME`; a `systemd-run` shim first in PATH (no
+systemd user manager on the private bus; Ptyxis wraps shells in
+`systemd-run --user --scope`); a short private runtime dir under
+`${TMPDIR:-/tmp}` (sun_path limits). The system bus stays private and empty —
+consequences: no NetworkManager/udisks/logind/polkit in nested apps.
+`NESTED_HELPER=1` loads the test helper for scripted checks.
+
 ## Later (not this wave)
 
 - Modular/dynamic layout: drag over a region of a free-form grid in the

@@ -599,13 +599,14 @@ PREFS_X, PREFS_Y = 2000, 40
 # review-prefs-open-prefs.png).
 PREFS_POINTS = {
     # Re-measured after Amendment 3 (General group, orientation switch,
-    # Landscape/Portrait headings) from review-prefs-open-prefs.png.
+    # Landscape/Portrait headings; Amendment 5 'Skip zones already filled' row)
+    # from review-prefs-open-prefs.png.
     "trigger-width+": (592, 268),
     "gap+": (592, 499),
     "snap-assist": (588, 608),
-    "thirds": (588, 948),
-    "custom-expander": (602, 1437),
-    "custom-text": (350, 1523),
+    "thirds": (588, 1003),
+    "custom-expander": (602, 1492),
+    "custom-text": (350, 1578),
 }
 
 
