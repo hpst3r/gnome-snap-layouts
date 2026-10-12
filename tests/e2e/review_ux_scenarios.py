@@ -189,7 +189,9 @@ def picker_shot(ctx, scheme, tag):
     win = R.standard_window(ctx)
     picker = ctx.drag_to_picker(win)
     # Park the pointer in the band left of the picker (no cell hovered).
-    ctx.glide(picker["x"] - 40, ctx.monitor()["workArea"]["y"] + 10, steps=10)
+    # Amendment 2: the band ends trigger-height (default 8) px below the
+    # work-area top, so stay within 2 px of it.
+    ctx.glide(picker["x"] - 40, ctx.monitor()["workArea"]["y"] + 2, steps=10)
     settle()
     idle = ctx.screenshot(tag + "-idle")
     cell = ctx.actor("snap-layouts-zone:halves:0")
