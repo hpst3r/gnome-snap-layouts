@@ -1,0 +1,380 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Unit tests for the pure modules. Run: gjs -m tests/layouts_test.js
+
+import {
+    BUILTIN_LAYOUTS, validateLayout, parseCustomLayouts, enabledLayouts,
+    zoneRect, inTriggerBand, pickerGeometry, hitTest, pointerInPicker,
+    restoreRect, rectsClose, MAX_COLUMNS,
+} from '../snap-layouts@wporter.org/lib/layouts.js';
+import {
+    initialDragState, stepDragState, HIDE_DELAY_MS,
+} from '../snap-layouts@wporter.org/lib/dragState.js';
+
+let failures = 0;
+let passes = 0;
+let current = '';
+
+function assert(cond, msg) {
+    if (cond) {
+        passes++;
+        return;
+    }
+    failures++;
+    print(`FAIL [${current}] ${msg}`);
+}
+
+function eq(actual, expected, msg) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    assert(a === e, `${msg}: expected ${e}, got ${a}`);
+}
+
+function test(name, fn) {
+    current = name;
+    try {
+        fn();
+    } catch (e) {
+        failures++;
+        print(`FAIL [${name}] threw ${e}\n${e.stack}`);
+    }
+}
+
+const WORK_AREAS = [
+    {x: 0, y: 32, width: 1920, height: 1048},
+    {x: 0, y: 27, width: 2560, height: 1413},
+    {x: 1920, y: 0, width: 1366, height: 768},
+];
+
+const area = r => r.width * r.height;
+function intersection(a, b) {
+    const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+    const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    return w > 0 && h > 0 ? w * h : 0;
+}
+const isInt = r => [r.x, r.y, r.width, r.height].every(Number.isInteger);
+const containsRect = (outer, r) => r.x >= outer.x && r.y >= outer.y &&
+    r.x + r.width <= outer.x + outer.width && r.y + r.height <= outer.y + outer.height;
+
+test('U1 built-ins validate with expected zone counts', () => {
+    const counts = {
+        'halves': 2,
+        'two-thirds-left': 2,
+        'thirds': 3,
+        'quadrants': 4,
+        'half-left-quarters-right': 3,
+        'quarters-left-half-right': 3,
+        'quarter-half-quarter': 3,
+    };
+    eq(BUILTIN_LAYOUTS.map(l => l.id), Object.keys(counts), 'built-in order');
+    assert(Object.isFrozen(BUILTIN_LAYOUTS), 'BUILTIN_LAYOUTS frozen');
+    for (const l of BUILTIN_LAYOUTS) {
+        const res = validateLayout(l);
+        assert(res.ok, `${l.id} validates (${res.error})`);
+        eq(l.zones.length, counts[l.id], `${l.id} zone count`);
+        assert(typeof l.name === 'string' && l.name.length > 0, `${l.id} has a name`);
+    }
+});
+
+test('U2 gap 0 zones tile the work area exactly', () => {
+    for (const wa of WORK_AREAS) {
+        for (const l of BUILTIN_LAYOUTS) {
+            const rects = l.zones.map(z => zoneRect(wa, z, 0));
+            const tag = `${l.id} @ ${JSON.stringify(wa)}`;
+            assert(rects.every(isInt), `${tag}: integer edges`);
+            assert(rects.every(r => containsRect(wa, r)), `${tag}: inside work area`);
+            eq(rects.reduce((s, r) => s + area(r), 0), area(wa), `${tag}: area sum`);
+            for (let i = 0; i < rects.length; i++) {
+                for (let j = i + 1; j < rects.length; j++)
+                    eq(intersection(rects[i], rects[j]), 0, `${tag}: zones ${i},${j} disjoint`);
+            }
+        }
+    }
+});
+
+test('U3 gap 8 insets outer edges by 8 and separates interior edges by 8', () => {
+    const gap = 8;
+    for (const wa of WORK_AREAS) {
+        for (const l of BUILTIN_LAYOUTS) {
+            const tag = `${l.id} @ ${JSON.stringify(wa)}`;
+            const plain = l.zones.map(z => zoneRect(wa, z, 0));
+            const gapped = l.zones.map(z => zoneRect(wa, z, gap));
+            assert(gapped.every(isInt), `${tag}: integer edges`);
+            gapped.forEach((r, i) => {
+                const p = plain[i];
+                // Outer edges are inset exactly `gap` from the work area.
+                if (p.x === wa.x)
+                    eq(r.x, wa.x + gap, `${tag} z${i} left`);
+                if (p.y === wa.y)
+                    eq(r.y, wa.y + gap, `${tag} z${i} top`);
+                if (p.x + p.width === wa.x + wa.width)
+                    eq(r.x + r.width, wa.x + wa.width - gap, `${tag} z${i} right`);
+                if (p.y + p.height === wa.y + wa.height)
+                    eq(r.y + r.height, wa.y + wa.height - gap, `${tag} z${i} bottom`);
+            });
+            // Neighbours sharing an interior edge are exactly `gap` apart.
+            for (let i = 0; i < plain.length; i++) {
+                for (let j = 0; j < plain.length; j++) {
+                    if (i === j)
+                        continue;
+                    const a = plain[i], b = plain[j];
+                    const vOverlap = Math.min(a.y + a.height, b.y + b.height) > Math.max(a.y, b.y);
+                    const hOverlap = Math.min(a.x + a.width, b.x + b.width) > Math.max(a.x, b.x);
+                    if (a.x + a.width === b.x && vOverlap)
+                        eq(gapped[j].x - (gapped[i].x + gapped[i].width), gap, `${tag} z${i}|z${j} horizontal gap`);
+                    if (a.y + a.height === b.y && hOverlap)
+                        eq(gapped[j].y - (gapped[i].y + gapped[i].height), gap, `${tag} z${i}/z${j} vertical gap`);
+                }
+            }
+        }
+    }
+    // Odd gap still separates neighbours by exactly the gap.
+    const [l, r] = BUILTIN_LAYOUTS[0].zones.map(z => zoneRect(WORK_AREAS[0], z, 7));
+    eq(r.x - (l.x + l.width), 7, 'odd gap 7');
+    eq(l.x, 7, 'odd gap outer');
+});
+
+test('U4 validateLayout rejects bad layouts', () => {
+    const good = {id: 'a', name: 'A', zones: [{x: 0, y: 0, w: 1, h: 1}]};
+    assert(validateLayout(good).ok, 'good layout ok');
+    const bad = {
+        'negative x': {id: 'a', zones: [{x: -0.1, y: 0, w: 0.5, h: 1}]},
+        'x + w > 1': {id: 'a', zones: [{x: 0.6, y: 0, w: 0.5, h: 1}]},
+        'y + h > 1': {id: 'a', zones: [{x: 0, y: 0.5, w: 1, h: 0.6}]},
+        'zero width': {id: 'a', zones: [{x: 0, y: 0, w: 0, h: 1}]},
+        'overlap': {id: 'a', zones: [{x: 0, y: 0, w: 0.6, h: 1}, {x: 0.5, y: 0, w: 0.5, h: 1}]},
+        'zero zones': {id: 'a', zones: []},
+        '>12 zones': {id: 'a', zones: Array.from({length: 13}, (_, i) => ({x: i / 13, y: 0, w: 1 / 13, h: 1}))},
+        'non-numeric': {id: 'a', zones: [{x: '0', y: 0, w: 1, h: 1}]},
+        'NaN': {id: 'a', zones: [{x: NaN, y: 0, w: 1, h: 1}]},
+        'zones not array': {id: 'a', zones: 'nope'},
+        'not object': 42,
+        'null': null,
+        'array': [],
+        'missing id': {zones: [{x: 0, y: 0, w: 1, h: 1}]},
+    };
+    for (const [name, obj] of Object.entries(bad)) {
+        const res = validateLayout(obj);
+        assert(!res.ok && typeof res.error === 'string', `rejects ${name}`);
+    }
+    // Edge-touching zones and 12 zones are fine; float noise within tolerance.
+    assert(validateLayout({id: 'a', zones: Array.from({length: 12}, (_, i) => ({x: i / 12, y: 0, w: 1 / 12, h: 1}))}).ok, '12 zones ok');
+    assert(validateLayout({id: 'a', zones: [{x: 0.1, y: 0, w: 0.9 + 1e-9, h: 1}]}).ok, 'tolerance ok');
+});
+
+test('U4 parseCustomLayouts', () => {
+    for (const garbage of ['', '{', 'not json', 'undefined']) {
+        const res = parseCustomLayouts(garbage);
+        eq(res.layouts, [], `garbage ${JSON.stringify(garbage)} -> no layouts`);
+        eq(res.errors.length, 1, `garbage ${JSON.stringify(garbage)} -> one error`);
+    }
+    for (const nonArray of ['{}', '42', '"x"', 'null']) {
+        const res = parseCustomLayouts(nonArray);
+        eq(res.layouts, [], `non-array ${nonArray}`);
+        eq(res.errors.length, 1, `non-array ${nonArray} error`);
+    }
+    eq(parseCustomLayouts('[]'), {layouts: [], errors: []}, 'empty array');
+
+    const zones = [{x: 0, y: 0, w: 1, h: 1}];
+    const res = parseCustomLayouts(JSON.stringify([
+        {id: 'halves', name: 'Mine', zones},   // collides with built-in
+        {id: 'mine', zones},
+        {id: 'mine', zones},                    // collides with earlier custom
+        {name: 'No id', zones},                 // index 3 -> custom-3
+        {id: 'broken', zones: []},              // dropped
+        'string entry',                         // dropped
+        {id: 'mine-2', zones},                  // collides with generated id
+    ]));
+    eq(res.layouts.map(l => l.id), ['halves-2', 'mine', 'mine-2', 'custom-3', 'mine-2-2'], 'ids');
+    eq(res.errors.length, 2, 'two invalid entries');
+    eq(res.layouts[0].name, 'Mine', 'name kept');
+    eq(res.layouts[3].name, 'No id', 'name kept for generated id');
+    eq(res.layouts[1].name, 'mine', 'name defaults to id');
+
+    const enabled = enabledLayouts(['thirds', 'quadrants'], res.layouts);
+    eq(enabled.map(l => l.id).slice(0, 5),
+        ['halves', 'two-thirds-left', 'half-left-quarters-right', 'quarters-left-half-right', 'quarter-half-quarter'],
+        'enabledLayouts filters built-ins in order');
+    eq(enabled.length, 5 + res.layouts.length, 'customs appended');
+});
+
+test('U5 inTriggerBand boundaries', () => {
+    const mon = {x: 0, y: 0, width: 1920, height: 1080};
+    const wa = {x: 0, y: 32, width: 1920, height: 1048};
+    const opts = {triggerWidthPct: 40, triggerHeight: 48};
+    // half-width = 1920 * 0.4 / 2 = 384 around centre 960 -> [576, 1344]
+    assert(inTriggerBand(mon, wa, 960, 40, opts), 'centre');
+    assert(inTriggerBand(mon, wa, 576, 40, opts), 'left edge inclusive');
+    assert(!inTriggerBand(mon, wa, 575, 40, opts), 'just left of band');
+    assert(inTriggerBand(mon, wa, 1344, 40, opts), 'right edge inclusive');
+    assert(!inTriggerBand(mon, wa, 1345, 40, opts), 'just right of band');
+    assert(inTriggerBand(mon, wa, 960, 79, opts), 'just above bottom (32 + 48 = 80)');
+    assert(!inTriggerBand(mon, wa, 960, 80, opts), 'at bottom edge excluded');
+    assert(inTriggerBand(mon, wa, 960, 0, opts), 'over the top panel counts');
+    assert(inTriggerBand(mon, wa, 960, 10, opts), 'over the panel counts');
+    assert(!inTriggerBand(mon, wa, 960, -1, opts), 'above the monitor');
+
+    const mon2 = {x: 1920, y: 0, width: 1366, height: 768};
+    const wa2 = {x: 1920, y: 0, width: 1366, height: 768};
+    // centre 2603, half-width 273.2
+    assert(inTriggerBand(mon2, wa2, 2603, 5, opts), 'second monitor centre');
+    assert(inTriggerBand(mon2, wa2, 2603 - 273, 5, opts), 'second monitor left inside');
+    assert(!inTriggerBand(mon2, wa2, 2603 - 274, 5, opts), 'second monitor left outside');
+    assert(!inTriggerBand(mon2, wa2, 960, 5, opts), 'pointer on other monitor');
+    assert(inTriggerBand(mon, wa, 0, 5, {triggerWidthPct: 100, triggerHeight: 48}), '100% width reaches left edge');
+});
+
+test('U6 pickerGeometry and hitTest', () => {
+    const mon = {x: 0, y: 0, width: 1920, height: 1080};
+    const wa = {x: 0, y: 32, width: 1920, height: 1048};
+    const layouts = enabledLayouts([], []);
+    const g = pickerGeometry(mon, wa, layouts);
+    eq(g.thumbs.length, layouts.length, 'one thumb per layout');
+    eq(g.y, wa.y + 8, 'top edge at workArea.y + 8');
+    assert(Math.abs(g.x + g.width / 2 - (mon.x + mon.width / 2)) <= 0.5, 'horizontally centred');
+    const cols = new Set(g.thumbs.map(t => t.x)).size;
+    assert(cols <= MAX_COLUMNS, `≤4 columns (${cols})`);
+    eq(g.thumbs[0].width, 112, 'base thumb width');
+    assert(Math.abs(g.thumbs[0].height / g.thumbs[0].width - wa.height / wa.width) < 0.01, 'thumb aspect = work area');
+    // Row-major order.
+    assert(g.thumbs[1].x > g.thumbs[0].x && g.thumbs[1].y === g.thumbs[0].y, 'row-major');
+    assert(g.thumbs[4].y > g.thumbs[0].y && g.thumbs[4].x === g.thumbs[0].x, 'wraps after 4');
+
+    const asRect = t => ({x: t.x, y: t.y, width: t.width, height: t.height});
+    for (let i = 0; i < g.thumbs.length; i++) {
+        const t = g.thumbs[i];
+        assert(containsRect(g, asRect(t)), `thumb ${i} inside picker`);
+        for (let j = i + 1; j < g.thumbs.length; j++)
+            eq(intersection(asRect(t), asRect(g.thumbs[j])), 0, `thumbs ${i},${j} disjoint`);
+        for (const c of t.cells) {
+            assert(containsRect(t, c), `thumb ${i} cell ${c.zoneIndex} inside thumb`);
+            // Hit at the cell centre.
+            eq(hitTest(g, c.x + c.width / 2, c.y + c.height / 2),
+                {layoutIndex: i, layoutId: t.layoutId, zoneIndex: c.zoneIndex},
+                `hit ${t.layoutId}:${c.zoneIndex}`);
+        }
+    }
+    // Gutters and outside.
+    const halves = g.thumbs[0];
+    const [c0, c1] = halves.cells;
+    const gutterX = (c0.x + c0.width + c1.x) / 2;
+    assert(c1.x - (c0.x + c0.width) >= 2.9, 'gutter is ~3 px');
+    eq(hitTest(g, gutterX, c0.y + c0.height / 2), null, 'gutter between cells');
+    eq(hitTest(g, halves.x + 0.5, halves.y + 0.5), null, 'thumb border');
+    eq(hitTest(g, halves.x + halves.width + 2, c0.y + 5), null, 'gutter between thumbs');
+    eq(hitTest(g, g.x - 10, g.y - 10), null, 'outside picker');
+    eq(hitTest(g, 5, 900), null, 'far outside');
+    eq(hitTest(null, 5, 5), null, 'null geometry');
+
+    // pointerInPicker margin.
+    assert(pointerInPicker(g, g.x + 1, g.y + 1, 0), 'inside');
+    assert(!pointerInPicker(g, g.x - 1, g.y + 1, 0), 'outside without margin');
+    assert(pointerInPicker(g, g.x - 24, g.y + 1, 24), 'within margin left');
+    assert(!pointerInPicker(g, g.x - 25, g.y + 1, 24), 'beyond margin left');
+    assert(pointerInPicker(g, g.x + g.width + 23, g.y + g.height + 23, 24), 'within margin bottom-right');
+    assert(!pointerInPicker(g, g.x + g.width + 24, g.y + 1, 24), 'beyond margin right');
+
+    // Scale 2 doubles sizes.
+    const g2 = pickerGeometry(mon, wa, layouts, {scale: 2});
+    eq(g2.width, g.width * 2, 'scale 2 width');
+    eq(g2.height, g.height * 2, 'scale 2 height');
+    eq(g2.thumbs[0].width, 224, 'scale 2 thumb width');
+    assert(Math.abs(g2.thumbs[0].cells[0].width - 2 * g.thumbs[0].cells[0].width) < 1.01, 'scale 2 cell width');
+    assert(Math.abs(g2.x + g2.width / 2 - 960) <= 0.5, 'scale 2 centred');
+
+    // Second monitor, fewer layouts than columns.
+    const mon2 = {x: 1920, y: 0, width: 1366, height: 768};
+    const g3 = pickerGeometry(mon2, mon2, layouts.slice(0, 2));
+    assert(Math.abs(g3.x + g3.width / 2 - (1920 + 683)) <= 0.5, 'centred on second monitor');
+    eq(g3.y, 8, 'second monitor top');
+    eq(new Set(g3.thumbs.map(t => t.y)).size, 1, 'single row');
+});
+
+test('U7 restoreRect', () => {
+    const wa = {x: 0, y: 32, width: 1920, height: 1048};
+    const snapped = {x: 960, y: 32, width: 960, height: 1048};
+    const saved = {width: 800, height: 600};
+    // Pointer at 75% across the snapped window, 15 px below its top.
+    const r = restoreRect(snapped, saved, 960 + 720, 47, wa);
+    eq([r.width, r.height], [800, 600], 'saved size');
+    eq(r.x, 1680 - 600, 'relative x kept (75% of 800)');
+    eq(r.y, 32, 'y offset kept');
+    assert(containsRect(wa, r), 'inside work area');
+
+    // Pointer near the right edge: relative x kept, still inside work area.
+    const r2 = restoreRect({x: 0, y: 32, width: 960, height: 1048}, saved, 950, 60, wa);
+    assert(Math.abs((950 - r2.x) / r2.width - 950 / 960) < 0.01, 'relative x near right edge');
+    eq(r2.y, 32, 'y offset 28 kept');
+    assert(containsRect(wa, r2), 'inside work area 2');
+
+    // Would leave the work area: clamped.
+    const r3 = restoreRect(snapped, saved, 1919, 40, wa);
+    assert(containsRect(wa, r3), 'clamped right');
+    const r4 = restoreRect({x: 0, y: 32, width: 960, height: 1048}, saved, 1, 40, wa);
+    assert(containsRect(wa, r4), 'clamped left');
+    // y offset larger than the restored height is clamped into the window.
+    const r5 = restoreRect(snapped, saved, 1440, 900, wa);
+    assert(900 >= r5.y && 900 < r5.y + r5.height, 'pointer y inside restored window');
+    assert(containsRect(wa, r5), 'inside work area 5');
+    // Saved size larger than the work area shrinks to fit.
+    const r6 = restoreRect(snapped, {width: 4000, height: 3000}, 1440, 60, wa);
+    assert(containsRect(wa, r6), 'oversize clamped');
+    // Odd work area on a second monitor.
+    const wa2 = {x: 1920, y: 0, width: 1366, height: 768};
+    const r7 = restoreRect({x: 1920, y: 0, width: 683, height: 768}, {width: 500, height: 400}, 2100, 12, wa2);
+    assert(containsRect(wa2, r7), 'second monitor inside');
+    assert(Math.abs((2100 - r7.x) / 500 - 180 / 683) < 0.01, 'second monitor relative x');
+});
+
+test('rectsClose', () => {
+    const a = {x: 0, y: 0, width: 100, height: 100};
+    assert(rectsClose(a, {x: 2, y: -2, width: 102, height: 98}), 'within 2');
+    assert(!rectsClose(a, {x: 3, y: 0, width: 100, height: 100}), 'x off by 3');
+    assert(rectsClose(a, {x: 3, y: 0, width: 100, height: 100}, 3), 'custom tol');
+    assert(!rectsClose(a, null), 'null');
+});
+
+test('drag state machine', () => {
+    const base = {monitor: 0, inPicker: false, showDelay: 80};
+    let s = initialDragState();
+    eq(s.phase, 'armed', 'new drag starts armed (no picker)');
+    s = stepDragState(s, {...base, now: 0, inBand: false});
+    eq(s.phase, 'armed', 'outside band stays armed');
+    s = stepDragState(s, {...base, now: 10, inBand: true});
+    eq(s.phase, 'pending', 'band entered');
+    s = stepDragState(s, {...base, now: 89, inBand: true});
+    eq(s.phase, 'pending', 'before delay');
+    s = stepDragState(s, {...base, now: 90, inBand: true});
+    eq(s.phase, 'shown', 'after delay');
+    // Leaving the band but staying in the picker keeps it.
+    s = stepDragState(s, {...base, now: 100, inBand: false, inPicker: true});
+    eq(s.phase, 'shown', 'in picker');
+    s = stepDragState(s, {...base, now: 110, inBand: false, inPicker: false});
+    eq(s.phase, 'shown', 'just left');
+    s = stepDragState(s, {...base, now: 110 + HIDE_DELAY_MS - 1, inBand: false});
+    eq(s.phase, 'shown', 'before hide delay');
+    // Coming back resets the hide timer.
+    s = stepDragState(s, {...base, now: 270, inBand: false, inPicker: true});
+    s = stepDragState(s, {...base, now: 280, inBand: false});
+    s = stepDragState(s, {...base, now: 280 + HIDE_DELAY_MS - 1, inBand: false});
+    eq(s.phase, 'shown', 'hide timer reset by return');
+    s = stepDragState(s, {...base, now: 280 + HIDE_DELAY_MS, inBand: false});
+    eq(s.phase, 'armed', 'hidden after delay');
+
+    // Leaving the band while pending cancels.
+    s = stepDragState(initialDragState(), {...base, now: 0, inBand: true});
+    s = stepDragState(s, {...base, now: 50, inBand: false});
+    eq(s.phase, 'armed', 'pending cancelled');
+    // Zero delay shows immediately.
+    s = stepDragState(initialDragState(), {...base, now: 0, inBand: true, showDelay: 0});
+    eq(s.phase, 'shown', 'zero delay');
+    // Monitor change while pending restarts the delay.
+    s = stepDragState(initialDragState(), {...base, now: 0, inBand: true});
+    s = stepDragState(s, {...base, now: 70, inBand: true, monitor: 1});
+    s = stepDragState(s, {...base, now: 100, inBand: true, monitor: 1});
+    eq(s.phase, 'pending', 'restarted on monitor change');
+    eq(s.monitor, 1, 'pending on new monitor');
+});
+
+print(`${passes} assertions passed, ${failures} failed`);
+if (failures > 0)
+    (await import('system')).default.exit(1);
