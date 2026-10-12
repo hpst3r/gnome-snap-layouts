@@ -3,7 +3,7 @@ SCHEMA := org.gnome.shell.extensions.snap-layouts.gschema.xml
 SRC    := $(UUID)
 DEST   := $(HOME)/.local/share/gnome-shell/extensions/$(UUID)
 
-.PHONY: test check pack install uninstall nested e2e clean
+.PHONY: test check pack install uninstall nested e2e review clean
 
 test:
 	@set -e; for t in $$(ls tests/*_test.js 2>/dev/null); do echo "== $$t"; gjs -m $$t; done
@@ -19,6 +19,12 @@ pack: check
 
 e2e:
 	scripts/e2e.sh
+
+# Review PoCs (expected to FAIL until fixed): unit + both E2E review modules.
+review:
+	-SNAP_REVIEW=1 $(MAKE) --no-print-directory test
+	-SNAP_REVIEW=core scripts/e2e.sh
+	-SNAP_REVIEW=ux scripts/e2e.sh
 
 # Host install: symlink + compiled schema. On Wayland, log out/in, then
 #   gnome-extensions enable $(UUID)

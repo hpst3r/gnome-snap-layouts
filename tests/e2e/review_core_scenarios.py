@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Adversarial review scenarios (review-core), all tagged ``review``.
 
-Loaded by run.py only when SNAP_REVIEW=1 (scripts/e2e.sh then also adds a
+Loaded by run.py only when SNAP_REVIEW=core (scripts/e2e.sh then also adds a
 second 1280x1024 virtual monitor right of the 1920x1080 one). Each scenario
 asserts the behaviour the SPEC / brief requires, so a FAIL is a finding.
 Scenarios tagged ``diag`` are harness controls/diagnostics, run only on
-request, e.g. ``make e2e SNAP_REVIEW="@diag"`` (SNAP_REVIEW may hold any
+request, e.g. ``SNAP_REVIEW=core scripts/e2e.sh @diag`` (any
 scenario/tag selection).
 
-Run as a script (``review_scenarios.py --client ...``) this file is a small
+Run as a script (``review_core_scenarios.py --client ...``) this file is a small
 GTK 4 client with options the harness client lacks (fixed size, minimum
 size, transient child window).
 """
@@ -554,7 +554,7 @@ def sc_settings_mid_drag(ctx):
 def second_monitor(ctx):
     mons = monitors(ctx)
     if len(mons) < 2:
-        raise Fail("needs 2 monitors (SNAP_REVIEW=1 scripts/e2e.sh adds one); "
+        raise Fail("needs 2 monitors (SNAP_REVIEW=core scripts/e2e.sh adds one); "
                    "got %d" % len(mons))
     ctx.notes.append("monitors: %s" % [(m["rect"], m["workArea"]) for m in mons])
     return mons[1]

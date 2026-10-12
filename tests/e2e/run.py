@@ -690,19 +690,29 @@ def sc_gap(ctx):
         ctx.ext_set("gap", "0")
 
 
-# SNAP_REVIEW=1 runs the @review scenarios; any other non-empty value is a
-# space-separated scenario/tag selection (with the review scenarios loaded).
+# Review PoCs: SNAP_REVIEW=core loads tests/e2e/review_core_scenarios.py,
+# SNAP_REVIEW=ux loads tests/e2e/review_ux_scenarios.py. With no selection on
+# the command line, a review run executes that module's @review scenarios.
 SNAP_REVIEW = os.environ.get("SNAP_REVIEW", "")
-if SNAP_REVIEW:
-    import review_scenarios  # noqa: E402,F401  (registers @review scenarios)
+REVIEW = bool(SNAP_REVIEW)
+if SNAP_REVIEW == "core":
+    sys.path.insert(0, HERE)
+    import review_core_scenarios  # noqa: E402,F401  (registers via __main__)
+elif SNAP_REVIEW == "ux":
+    sys.path.insert(0, HERE)
+    import review_ux_scenarios  # noqa: E402
+    review_ux_scenarios.register(sys.modules[__name__])
+elif SNAP_REVIEW:
+    raise SystemExit("SNAP_REVIEW must be core or ux")
 
 
 # ---------------------------------------------------------------- runner
 def select(names):
     if not names and SNAP_REVIEW:
-        names = ["@review"] if SNAP_REVIEW == "1" else SNAP_REVIEW.split()
+        names = ["@review"]
     if not names:
-        return [n for n, s in SCENARIOS.items() if "review" not in s["tags"]]
+        return [n for n, s in SCENARIOS.items()
+                if ("review" in s["tags"]) == REVIEW]
     out = []
     for pat in names:
         if pat.startswith("@"):
