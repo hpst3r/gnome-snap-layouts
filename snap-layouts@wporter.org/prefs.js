@@ -40,13 +40,27 @@ function layoutRow(settings, layout) {
     return row;
 }
 
-function customLayoutsRow(settings) {
+function customLayoutsRow(settings, window) {
     const expander = new Adw.ExpanderRow({
         title: 'Custom layouts (JSON)',
         subtitle: 'Array of {"id", "name", "zones": [{"x", "y", "w", "h"}]} with fractions of the work area',
     });
 
     const buffer = new Gtk.TextBuffer({text: settings.get_string('custom-layouts')});
+    const bufferText = () => buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
+    // Follow changes made elsewhere (another prefs window, gsettings).
+    // Text that only differs by surrounding whitespace is left alone so
+    // Apply does not reset the cursor.
+    const changedId = settings.connect('changed::custom-layouts', () => {
+        const value = settings.get_string('custom-layouts');
+        const text = bufferText().trim();
+        if (text !== value.trim() && !(text === '' && value.trim() === '[]'))
+            buffer.text = value;
+    });
+    window.connect('close-request', () => {
+        settings.disconnect(changedId);
+        return false;
+    });
     const view = new Gtk.TextView({
         buffer,
         monospace: true,
@@ -70,8 +84,8 @@ function customLayoutsRow(settings) {
     });
     const apply = new Gtk.Button({label: 'Apply', valign: Gtk.Align.CENTER, css_classes: ['suggested-action']});
     apply.connect('clicked', () => {
-        const text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), false);
-        const json = text.trim() === '' ? '[]' : text.trim();
+        const text = bufferText().trim();
+        const json = text === '' ? '[]' : text;
         const {layouts, errors} = parseCustomLayouts(json);
         if (errors.length > 0) {
             status.label = `Not saved:\n${errors.join('\n')}`;
@@ -130,7 +144,7 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
         const layouts = new Adw.PreferencesGroup({title: 'Layouts'});
         for (const layout of BUILTIN_LAYOUTS)
             layouts.add(layoutRow(settings, layout));
-        layouts.add(customLayoutsRow(settings));
+        layouts.add(customLayoutsRow(settings, window));
         page.add(layouts);
 
         const debug = new Adw.PreferencesGroup({title: 'Debug'});

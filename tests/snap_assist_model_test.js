@@ -4,7 +4,7 @@
 import System from 'system';
 
 import {
-    gridForZone, fitSize, selectCandidates, navigateIndex,
+    assistMetrics, gridForZone, fitSize, minimizedIconSize, selectCandidates, navigateIndex,
 } from '../snap-layouts@wporter.org/lib/snapAssistModel.js';
 
 let failures = 0;
@@ -138,6 +138,54 @@ for (const zone of zones) {
     check(g.cols >= 1 && g.thumbW > 0 && !g.scroll, 'defaults produce a grid');
 }
 
+// --- assistMetrics: Windows 11-sized thumbnails --------------------------
+{
+    // Two candidates in a 960x1048 half zone of a 1920x1080 monitor: each
+    // thumbnail takes at least half the zone width (review-assist-thumb-size).
+    const zone = {x: 960, y: 32, width: 960, height: 1048};
+    const m = assistMetrics(zone, 2);
+    check(m.padding === 24 && m.spacing === 16 && m.minThumb === 160, `metrics at scale 1 ${JSON.stringify(m)}`);
+    check(m.maxThumb === 720 && m.iconSize === 32, `2 candidates: max 720, large icon ${JSON.stringify(m)}`);
+    check(m.labelHeight >= m.iconSize + 6, `title row fits the large icon ${JSON.stringify(m)}`);
+    const g = gridForZone(zone, 2, {aspect: 1920 / 1048, ...m});
+    check(g.thumbW >= zone.width / 2 && !g.scroll, `half zone, 2 windows: thumbW ${g.thumbW}`);
+
+    const m3 = assistMetrics(zone, 3);
+    check(m3.iconSize === 20 && m3.labelHeight === 28, `3+ candidates: small icon ${JSON.stringify(m3)}`);
+
+    // maxThumb never exceeds the inner zone width.
+    const narrow = assistMetrics({width: 500, height: 900}, 1);
+    check(narrow.maxThumb === 452, `narrow zone caps maxThumb at inner width (${narrow.maxThumb})`);
+
+    // HiDPI: everything scales.
+    const m2 = assistMetrics({width: 3840, height: 2096}, 4, 2);
+    check(m2.padding === 48 && m2.spacing === 32 && m2.minThumb === 320 &&
+        m2.maxThumb === 1440 && m2.labelHeight === 56 && m2.iconSize === 20, `scale 2 ${JSON.stringify(m2)}`);
+
+    // Every built-in zone shape of a 1080p work area: no scrolling up to 6
+    // candidates, thumbnails never below minThumb.
+    for (const z of zones) {
+        for (let n = 1; n <= 6; n++) {
+            const mm = assistMetrics(z, n);
+            const gg = gridForZone(z, n, {aspect: 1920 / 1048, ...mm});
+            const tag = `zone ${z.width}x${z.height} n=${n}`;
+            check(gg.thumbW <= mm.maxThumb, `${tag}: ≤ maxThumb (${gg.thumbW})`);
+            if (!gg.scroll)
+                check(gg.thumbW >= mm.minThumb, `${tag}: ≥ minThumb (${gg.thumbW})`);
+        }
+    }
+    check(!gridForZone(zones[1], 4, {aspect: 1920 / 1048, ...assistMetrics(zones[1], 4)}).scroll,
+        'quadrant with 4 windows does not scroll');
+}
+
+// --- minimizedIconSize ----------------------------------------------------
+{
+    check(minimizedIconSize(720, 393) === 128, `big preview → 128 (${minimizedIconSize(720, 393)})`);
+    check(minimizedIconSize(160, 87) === 43, `small preview → half (${minimizedIconSize(160, 87)})`);
+    check(minimizedIconSize(20, 10) === 16, 'tiny preview → 16');
+    check(minimizedIconSize(1440, 786, 2) === 128, 'scale 2 → logical px');
+}
+
 // --- fitSize ---------------------------------------------------------------
 {
     const s = fitSize(1920, 1080, 320, 200);
@@ -153,11 +201,12 @@ for (const zone of zones) {
 // --- selectCandidates ----------------------------------------------------------
 {
     const NORMAL = 0, DIALOG = 3;
-    const mk = (name, {type = NORMAL, skip = false, monitor = 0} = {}) => ({
+    const mk = (name, {type = NORMAL, skip = false, monitor = 0, transientFor = null} = {}) => ({
         name,
         get_window_type: () => type,
         is_skip_taskbar: () => skip,
         get_monitor: () => monitor,
+        get_transient_for: () => transientFor,
     });
     const a = mk('a'), b = mk('b'), c = mk('c', {type: DIALOG}),
         d = mk('d', {skip: true}), e = mk('e', {monitor: 1}), f = mk('f');
@@ -169,6 +218,10 @@ for (const zone of zones) {
     check(res2.length === 1 && res2[0] === e, 'selectCandidates honours monitor');
     const res3 = selectCandidates([a, f], {monitorIndex: 0, normalType: NORMAL, excluded: [a, f]});
     check(res3.length === 0, 'selectCandidates accepts array exclusions');
+    // Transient NORMAL windows (e.g. a modal-less child) are not offered.
+    const t = mk('t', {transientFor: a});
+    const res4 = selectCandidates([t, a], {monitorIndex: 0, normalType: NORMAL});
+    check(res4.length === 1 && res4[0] === a, `selectCandidates drops transient windows (${res4.map(w => w.name)})`);
 }
 
 // --- navigateIndex ---------------------------------------------------------
