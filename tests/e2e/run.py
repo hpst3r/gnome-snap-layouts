@@ -706,13 +706,26 @@ elif SNAP_REVIEW:
     raise SystemExit("SNAP_REVIEW must be core or ux")
 
 
+# Feature scenario modules: every tests/e2e/scn_*.py is imported and
+# registers scenarios through `import __main__ as R; @R.scenario(...)`.
+# Scenarios tagged ``portrait`` need E2E_EXTRA_MONITOR (a second, portrait
+# monitor) and are excluded from the default selection.
+sys.path.insert(0, HERE)
+for _f in sorted(os.listdir(HERE)):
+    if _f.startswith("scn_") and _f.endswith(".py"):
+        __import__(_f[:-3])
+
+OPT_IN_TAGS = {"portrait"}
+
+
 # ---------------------------------------------------------------- runner
 def select(names):
     if not names and SNAP_REVIEW:
         names = ["@review"]
     if not names:
         return [n for n, s in SCENARIOS.items()
-                if ("review" in s["tags"]) == REVIEW]
+                if ("review" in s["tags"]) == REVIEW
+                and not (s["tags"] & OPT_IN_TAGS)]
     out = []
     for pat in names:
         if pat.startswith("@"):

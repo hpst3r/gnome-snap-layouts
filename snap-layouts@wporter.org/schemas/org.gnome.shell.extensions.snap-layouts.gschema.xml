@@ -37,6 +37,15 @@
       <default>'[]'</default>
       <summary>Custom layouts (JSON array)</summary>
     </key>
+    <key name="match-orientation" type="b">
+      <default>true</default>
+      <summary>Offer layouts matching the monitor's orientation</summary>
+      <description>Landscape monitors show landscape layouts, portrait monitors show portrait layouts; custom layouts without an orientation show on both. When off, every enabled layout is offered everywhere.</description>
+    </key>
+    <key name="show-indicator" type="b">
+      <default>true</default>
+      <summary>Show a top bar menu</summary>
+    </key>
     <key name="debug" type="b">
       <default>false</default>
       <summary>Log snapping decisions</summary>

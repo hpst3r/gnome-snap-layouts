@@ -10,6 +10,7 @@ import {enabledLayouts, parseCustomLayouts, zoneRect} from './lib/layouts.js';
 import {DragWatcher, isPointerMove} from './lib/dragWatcher.js';
 import {Tiler} from './lib/tiler.js';
 import {showSnapAssist} from './lib/snapAssist.js';
+import {SnapIndicator} from './lib/indicator.js';
 
 export default class SnapLayoutsExtension extends Extension {
     enable() {
@@ -18,6 +19,10 @@ export default class SnapLayoutsExtension extends Extension {
         this._settingsId = this._settings.connect('changed', () => {
             this._config = null;
         });
+        this._indicator = null;
+        this._indicatorId = this._settings.connect('changed::show-indicator',
+            () => this._syncIndicator());
+        this._syncIndicator();
         this._idleIds = new Set();
         this._assist = null;
 
@@ -31,6 +36,11 @@ export default class SnapLayoutsExtension extends Extension {
     }
 
     disable() {
+        if (this._indicatorId)
+            this._settings.disconnect(this._indicatorId);
+        this._indicatorId = 0;
+        this._indicator?.destroy();
+        this._indicator = null;
         this._watcher?.destroy();
         this._watcher = null;
         this._closeAssist();
@@ -44,6 +54,17 @@ export default class SnapLayoutsExtension extends Extension {
         this._settingsId = 0;
         this._settings = null;
         this._config = null;
+    }
+
+    /** Create or destroy the top bar menu to match `show-indicator`. */
+    _syncIndicator() {
+        const want = this._settings.get_boolean('show-indicator');
+        if (want && !this._indicator) {
+            this._indicator = new SnapIndicator(this, this._settings);
+        } else if (!want && this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+        }
     }
 
     _log(...args) {
@@ -65,6 +86,8 @@ export default class SnapLayoutsExtension extends Extension {
             restore: s.get_boolean('restore-size-on-drag'),
             snapAssist: s.get_boolean('snap-assist'),
             debug: s.get_boolean('debug'),
+            matchOrientation: s.get_boolean('match-orientation'),
+            // All enabled layouts; filter per monitor with layoutsForWorkArea().
             layouts: enabledLayouts(s.get_strv('disabled-layouts'), custom),
         };
         if (errors.length > 0)

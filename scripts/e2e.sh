@@ -102,7 +102,7 @@ if [[ -z ${E2E_INNER:-} ]]; then
         NO_AT_BRIDGE=1 GTK_A11Y=none GSK_RENDERER=cairo \
         E2E_INNER=1 E2E_RUN="$RUN" E2E_REPO="$REPO" \
         E2E_TIMEOUT="${E2E_TIMEOUT:-$([[ -n ${SNAP_REVIEW:-} ]] && echo 900 || echo 240)}" \
-        SNAP_REVIEW="${SNAP_REVIEW:-}" \
+        SNAP_REVIEW="${SNAP_REVIEW:-}" E2E_EXTRA_MONITOR="${E2E_EXTRA_MONITOR:-}" \
         E2E_CLIENT_DEBUG="${E2E_CLIENT_DEBUG:-}" E2E_HOLD="${E2E_HOLD:-}" \
         dbus-run-session --config-file="$RUN/dbus/session.conf" \
         -- "$REPO/scripts/e2e.sh" "$@" \
@@ -160,6 +160,9 @@ case ${SNAP_REVIEW:-} in
     '') ;;
     *) echo "SNAP_REVIEW must be core or ux (got '$SNAP_REVIEW')" >&2; exit 2 ;;
 esac
+# E2E_EXTRA_MONITOR=WxH adds one more monitor to the right (e.g. 1080x1920
+# portrait for the @portrait scenarios; `make e2e` runs that second pass).
+[[ -n ${E2E_EXTRA_MONITOR:-} ]] && EXTRA_MONITORS+=(--virtual-monitor "$E2E_EXTRA_MONITOR")
 gnome-shell --headless --wayland --no-x11 \
     --virtual-monitor 1920x1080 "${EXTRA_MONITORS[@]}" \
     --wayland-display "$DISPLAY_NAME" \

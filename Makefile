@@ -19,6 +19,7 @@ pack: check
 
 e2e:
 	scripts/e2e.sh
+	E2E_EXTRA_MONITOR=1080x1920 scripts/e2e.sh @portrait
 
 # Review PoCs (expected to FAIL until fixed): unit + both E2E review modules.
 review:

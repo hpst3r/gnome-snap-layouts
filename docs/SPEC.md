@@ -250,6 +250,58 @@ unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
   `SNAP_REVIEW=core scripts/e2e.sh`, `SNAP_REVIEW=ux scripts/e2e.sh`; after the
   fix wave they are regression suites and must pass (except `@diag`).
 
+## Amendment 3 (portrait layouts, orientation matching, top bar menu)
+
+### Portrait layouts and orientation
+- A layout gains `orientation: 'landscape' | 'portrait' | 'any'`.
+  Existing built-ins are `landscape`. New built-ins, `portrait`, appended in
+  this order (zone order = reading order, top to bottom, then left to right):
+
+  | id | name | zones (fractions x,y,w,h) |
+  |---|---|---|
+  | `v-halves` | Stacked halves | (0,0,1,½) (0,½,1,½) |
+  | `v-thirds` | Stacked thirds | (0,0,1,⅓) (0,⅓,1,⅓) (0,⅔,1,⅓) |
+  | `v-large-two-small` | Large + two small | (0,0,1,½) (0,½,½,½) (½,½,½,½) — the 90° rotation of `half-left-quarters-right` |
+
+- Custom layouts may set `orientation`; missing → `any`; any other value is a
+  validation error for that entry.
+- A monitor is **portrait** when its work area's height > width, else
+  landscape. With `match-orientation` true (default), the picker offers
+  enabled layouts whose orientation is that monitor's or `any`; with false,
+  every enabled layout everywhere. If the filter leaves nothing, the picker
+  is not shown.
+- Pure API addition in `lib/layouts.js`:
+  `workAreaOrientation(workArea) -> 'landscape'|'portrait'` and
+  `layoutsForWorkArea(layouts, workArea, matchOrientation) -> Layout[]`
+  (order preserved). `extension.js` config already exposes
+  `matchOrientation` (architect seam); `dragWatcher` applies the filter when
+  it shows the picker.
+- Picker thumbnails keep the work-area aspect. For portrait work areas the
+  thumbnail HEIGHT is `THUMB_WIDTH × scale` × (work-area h/w) capped so the
+  thumbnail's longer side ≤ 176 × scale (keep the picker compact).
+- Prefs: the Layouts group lists built-ins under "Landscape" and "Portrait"
+  headings; a "Match monitor orientation" switch (`match-orientation`).
+
+### Top bar menu (`show-indicator`, default true)
+- `lib/indicator.js` `SnapIndicator(extension, settings)` — a
+  `PanelMenu.Button` added with `Main.panel.addToStatusArea(uuid, …)`, icon
+  `view-grid-symbolic`, accessible name "Snap Layouts", actor name
+  `snap-layouts-indicator`. Menu items (actor names in brackets):
+  - switch "Snap Assist" (`snap-layouts-indicator-item:snap-assist`) bound to `snap-assist`
+  - switch "Restore size on drag-out" (`…:restore-size-on-drag`)
+  - switch "Match monitor orientation" (`…:match-orientation`)
+  - separator; "Settings…" (`…:settings`) → `extension.openPreferences()`.
+  Switches reflect external setting changes live. `destroy()` is idempotent
+  and disconnects every signal.
+- `extension.js` (architect seam, done) creates/destroys it live on
+  `changed::show-indicator`. Prefs gets a "Show top bar menu" switch.
+
+### E2E
+- Feature scenario modules `tests/e2e/scn_*.py` are auto-loaded by run.py
+  (`import __main__ as R; @R.scenario(...)`). Tag `portrait` scenarios run
+  only with `E2E_EXTRA_MONITOR=1080x1920` (second monitor, right of the
+  primary); `make e2e` runs the default pass and then `@portrait`.
+
 ## Later (not this wave)
 
 - Modular/dynamic layout: drag over a region of a free-form grid in the
