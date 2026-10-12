@@ -29,4 +29,51 @@
 }
 
 /* snap-assist:begin */
+.snap-layouts-assist-backdrop {
+    background-color: rgba(0, 0, 0, 0.12);
+}
+
+.snap-layouts-assist-zone {
+    border-radius: 12px;
+}
+
+.snap-layouts-assist-zone.active {
+    background-color: rgba(36, 36, 36, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.snap-layouts-assist-zone.placeholder {
+    background-color: rgba(36, 36, 36, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+/* padding must match THUMB_PADDING in lib/snapAssist.js */
+.snap-layouts-assist-thumb {
+    padding: 6px;
+    border-radius: 10px;
+    color: #ffffff;
+    transition-duration: 100ms;
+}
+
+.snap-layouts-assist-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.snap-layouts-assist-thumb:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 0 0 2px -st-accent-color;
+}
+
+.snap-layouts-assist-thumb:active {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.snap-layouts-assist-thumb-header {
+    spacing: 6px;
+}
+
+.snap-layouts-assist-thumb-title {
+    font-size: 10pt;
+}
 /* snap-assist:end */
