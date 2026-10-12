@@ -302,6 +302,17 @@ unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
   only with `E2E_EXTRA_MONITOR=1080x1920` (second monitor, right of the
   primary); `make e2e` runs the default pass and then `@portrait`.
 
+## Amendment 4 (interactive nested shell)
+
+`make nested` → `scripts/nested.sh` → `E2E_NESTED=1 scripts/e2e.sh` is the
+only allowed way to start a visible `--devkit` shell. It gets the same
+isolation as the test modes (private XDG dirs, private session bus, empty
+private system bus) plus a private PipeWire + `wireplumber --profile policy`
+for the devkit viewer's screencast; the viewer's only host resource is the
+host Wayland display socket. `scripts/nested.sh --run CMD` starts a client
+inside the newest nested shell. Extra monitors: use the viewer's "Add
+Monitor" menu (devkit monitors are viewer windows, not `--virtual-monitor`).
+
 ## Later (not this wave)
 
 - Modular/dynamic layout: drag over a region of a free-form grid in the
