@@ -21,6 +21,22 @@ function switchRow(settings, key, title, subtitle = '') {
     return row;
 }
 
+function headingRow(label) {
+    return new Gtk.ListBoxRow({
+        activatable: false,
+        selectable: false,
+        child: new Gtk.Label({
+            label,
+            xalign: 0,
+            margin_top: 12,
+            margin_bottom: 6,
+            margin_start: 12,
+            margin_end: 12,
+            css_classes: ['heading'],
+        }),
+    });
+}
+
 function layoutRow(settings, layout) {
     const row = new Adw.SwitchRow({title: layout.name, subtitle: layout.id});
     const sync = () => {
@@ -43,7 +59,8 @@ function layoutRow(settings, layout) {
 function customLayoutsRow(settings, window) {
     const expander = new Adw.ExpanderRow({
         title: 'Custom layouts (JSON)',
-        subtitle: 'Array of {"id", "name", "zones": [{"x", "y", "w", "h"}]} with fractions of the work area',
+        subtitle: 'Array of {"id", "name", "orientation", "zones": [{"x", "y", "w", "h"}]} with fractions ' +
+            'of the work area; orientation is "landscape", "portrait" or "any" (default)',
     });
 
     const buffer = new Gtk.TextBuffer({text: settings.get_string('custom-layouts')});
@@ -124,6 +141,11 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
             icon_name: 'view-grid-symbolic',
         });
 
+        const general = new Adw.PreferencesGroup({title: 'General'});
+        general.add(switchRow(settings, 'show-indicator', 'Show top bar menu',
+            'Quick toggles and a shortcut to these settings in the top bar'));
+        page.add(general);
+
         const trigger = new Adw.PreferencesGroup({
             title: 'Trigger',
             description: 'Drag a window into this band at the top centre of a monitor to show the layout picker',
@@ -142,8 +164,13 @@ export default class SnapLayoutsPreferences extends ExtensionPreferences {
         page.add(snapping);
 
         const layouts = new Adw.PreferencesGroup({title: 'Layouts'});
-        for (const layout of BUILTIN_LAYOUTS)
-            layouts.add(layoutRow(settings, layout));
+        layouts.add(switchRow(settings, 'match-orientation', 'Match monitor orientation',
+            'Offer portrait layouts only on portrait monitors and landscape layouts only on landscape ones'));
+        for (const [orientation, heading] of [['landscape', 'Landscape'], ['portrait', 'Portrait']]) {
+            layouts.add(headingRow(heading));
+            for (const layout of BUILTIN_LAYOUTS.filter(l => l.orientation === orientation))
+                layouts.add(layoutRow(settings, layout));
+        }
         layouts.add(customLayoutsRow(settings, window));
         page.add(layouts);
 

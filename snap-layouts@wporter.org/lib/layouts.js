@@ -15,14 +15,20 @@ export const PICKER_TOP_OFFSET = 8;
 /** Gutter between zone cells inside a thumbnail (logical px). */
 export const CELL_GUTTER = 3;
 export const MAX_COLUMNS = 4;
+/** Longest side of a thumbnail in logical px (caps portrait thumbnails). */
+export const THUMB_MAX_SIDE = 176;
+
+/** Valid layout orientations; `any` matches every monitor. */
+export const ORIENTATIONS = Object.freeze(['landscape', 'portrait', 'any']);
 
 const freezeLayout = l => Object.freeze({
     id: l.id,
     name: l.name,
+    orientation: l.orientation ?? 'any',
     zones: Object.freeze(l.zones.map(z => Object.freeze({...z}))),
 });
 
-export const BUILTIN_LAYOUTS = Object.freeze([
+const LANDSCAPE_LAYOUTS = [
     {
         id: 'halves',
         name: 'Halves',
@@ -85,7 +91,42 @@ export const BUILTIN_LAYOUTS = Object.freeze([
             {x: 3 / 4, y: 0, w: 1 / 4, h: 1},
         ],
     },
-].map(freezeLayout));
+];
+
+// Zone order is reading order: top to bottom, then left to right.
+const PORTRAIT_LAYOUTS = [
+    {
+        id: 'v-halves',
+        name: 'Stacked halves',
+        zones: [
+            {x: 0, y: 0, w: 1, h: 1 / 2},
+            {x: 0, y: 1 / 2, w: 1, h: 1 / 2},
+        ],
+    },
+    {
+        id: 'v-thirds',
+        name: 'Stacked thirds',
+        zones: [
+            {x: 0, y: 0, w: 1, h: 1 / 3},
+            {x: 0, y: 1 / 3, w: 1, h: 1 / 3},
+            {x: 0, y: 2 / 3, w: 1, h: 1 / 3},
+        ],
+    },
+    {
+        id: 'v-large-two-small',
+        name: 'Large + two small',
+        zones: [
+            {x: 0, y: 0, w: 1, h: 1 / 2},
+            {x: 0, y: 1 / 2, w: 1 / 2, h: 1 / 2},
+            {x: 1 / 2, y: 1 / 2, w: 1 / 2, h: 1 / 2},
+        ],
+    },
+];
+
+export const BUILTIN_LAYOUTS = Object.freeze([
+    ...LANDSCAPE_LAYOUTS.map(l => freezeLayout({...l, orientation: 'landscape'})),
+    ...PORTRAIT_LAYOUTS.map(l => freezeLayout({...l, orientation: 'portrait'})),
+]);
 
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -98,7 +139,8 @@ function overlapArea(a, b) {
 /**
  * Validate a layout object.
  *
- * @param {*} obj candidate `{id, name, zones: [{x, y, w, h}]}`
+ * @param {*} obj candidate `{id, name, orientation, zones: [{x, y, w, h}]}`;
+ *   a missing orientation means `any`
  * @returns {{ok: true, layout: object} | {ok: false, error: string}}
  *   on success `layout` is a normalised frozen copy
  */
@@ -109,6 +151,8 @@ export function validateLayout(obj) {
         return {ok: false, error: 'layout id must be a non-empty string'};
     if (obj.name !== undefined && typeof obj.name !== 'string')
         return {ok: false, error: `${obj.id}: name must be a string`};
+    if (obj.orientation !== undefined && !ORIENTATIONS.includes(obj.orientation))
+        return {ok: false, error: `${obj.id}: orientation must be one of ${ORIENTATIONS.join(', ')}`};
     if (!Array.isArray(obj.zones))
         return {ok: false, error: `${obj.id}: zones must be an array`};
     if (obj.zones.length < 1 || obj.zones.length > MAX_ZONES)
@@ -131,7 +175,10 @@ export function validateLayout(obj) {
                 return {ok: false, error: `${obj.id}: zones ${i} and ${j} overlap`};
         }
     }
-    return {ok: true, layout: freezeLayout({id: obj.id, name: obj.name ?? obj.id, zones})};
+    return {
+        ok: true,
+        layout: freezeLayout({id: obj.id, name: obj.name ?? obj.id, orientation: obj.orientation, zones}),
+    };
 }
 
 /**
@@ -189,6 +236,33 @@ export function enabledLayouts(disabledIds, customLayouts) {
 }
 
 /**
+ * Orientation of a work area: portrait when taller than wide, else
+ * landscape (a square counts as landscape).
+ *
+ * @param {{width: number, height: number}} workArea
+ * @returns {'landscape' | 'portrait'}
+ */
+export function workAreaOrientation(workArea) {
+    return workArea.height > workArea.width ? 'portrait' : 'landscape';
+}
+
+/**
+ * Layouts to offer on a monitor with this work area.
+ *
+ * @param {object[]} layouts enabled layouts in picker order
+ * @param {{width: number, height: number}} workArea
+ * @param {boolean} matchOrientation when false every layout is offered
+ * @returns {object[]} layouts whose orientation is the work area's or `any`
+ *   (order preserved)
+ */
+export function layoutsForWorkArea(layouts, workArea, matchOrientation) {
+    if (!matchOrientation)
+        return [...layouts];
+    const orientation = workAreaOrientation(workArea);
+    return layouts.filter(l => (l.orientation ?? 'any') === 'any' || l.orientation === orientation);
+}
+
+/**
  * Integer target rectangle of a zone inside a work area.
  *
  * Edges are rounded on the work-area grid first so adjacent zones share
@@ -241,6 +315,10 @@ export function inTriggerBand(monitor, workArea, px, py, {triggerWidthPct, trigg
 /**
  * Absolute stage geometry of the picker and its thumbnails/cells.
  *
+ * Thumbnails keep the work-area aspect: `THUMB_WIDTH` wide, unless that
+ * would make them taller than `THUMB_MAX_SIDE` (portrait work areas), in
+ * which case they are `THUMB_MAX_SIDE` high and narrower (all scaled).
+ *
  * @param {{x, y, width, height}} monitor
  * @param {{x, y, width, height}} workArea
  * The top edge sits `PICKER_TOP_OFFSET` (scaled) below the bottom of the
@@ -254,8 +332,12 @@ export function inTriggerBand(monitor, workArea, px, py, {triggerWidthPct, trigg
 export function pickerGeometry(monitor, workArea, layouts, {scale = 1, triggerHeight = 0} = {}) {
     const padding = PICKER_PADDING * scale;
     const spacing = PICKER_SPACING * scale;
-    const thumbW = THUMB_WIDTH * scale;
-    const thumbH = Math.round(thumbW * workArea.height / workArea.width);
+    let thumbW = THUMB_WIDTH * scale;
+    let thumbH = Math.round(thumbW * workArea.height / workArea.width);
+    if (thumbH > THUMB_MAX_SIDE * scale) {
+        thumbH = THUMB_MAX_SIDE * scale;
+        thumbW = Math.round(thumbH * workArea.width / workArea.height);
+    }
     const inset = CELL_GUTTER / 2 * scale;
 
     const n = layouts.length;
