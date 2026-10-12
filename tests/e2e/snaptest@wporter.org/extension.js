@@ -61,6 +61,10 @@ const IFACE_XML = `
     <method name="Log">
       <arg name="message" type="s" direction="in"/>
     </method>
+    <method name="LaunchApp">
+      <arg name="desktop_id" type="s" direction="in"/>
+      <arg type="s" direction="out"/>
+    </method>
   </interface>
 </node>`;
 
@@ -254,6 +258,27 @@ class SnapTestService {
 
     Log(message) {
         console.log(`[snaptest] ${message}`);
+    }
+
+    /**
+     * Launches an app the way the dash/app grid does (nested-mode checks).
+     *
+     * @param {string} desktopId e.g. "org.gnome.TextEditor.desktop"
+     * @returns {string} JSON {ok, error?, state?}
+     */
+    LaunchApp(desktopId) {
+        const app = Shell.AppSystem.get_default().lookup_app(desktopId);
+        if (!app)
+            return JSON.stringify({ok: false, error: `no app ${desktopId}`});
+        try {
+            if (app.can_open_new_window())
+                app.open_new_window(-1);
+            else
+                app.activate();
+        } catch (e) {
+            return JSON.stringify({ok: false, error: e.message});
+        }
+        return JSON.stringify({ok: true, state: app.state});
     }
 }
 

@@ -41,7 +41,8 @@ uninstall:
 
 # Visible nested shell (devkit window) for manual testing, isolated like the
 # E2E harness (private dconf, buses, XDG dirs; the working tree's extension
-# is copied, not installed). Needs mutter-devkit. Start apps inside it with
+# is copied, not installed). Needs mutter-devkit. Apps open from its dash and
+# app grid (private session bus activation), or from a terminal with
 #   scripts/nested.sh --run gnome-text-editor --standalone
 nested:
 	scripts/nested.sh

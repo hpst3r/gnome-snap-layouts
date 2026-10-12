@@ -9,7 +9,11 @@
 #   scripts/nested.sh --run CMD ...   start CMD inside the running nested
 #                                     session, with its private environment
 #
-# Environment: NESTED_TIMEOUT=secs stops the nested shell after secs.
+# Apps also open from the nested dash/app grid (standard session services
+# are activated on the private session bus).
+#
+# Environment: NESTED_TIMEOUT=secs stops the nested shell after secs;
+# NESTED_HELPER=1 also loads the test helper extension (scripted checks).
 
 set -euo pipefail
 
