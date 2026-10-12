@@ -25,6 +25,9 @@
 #                     is closed. See "Nested mode" below.
 #   NESTED_TIMEOUT=s  nested mode: stop the shell after s seconds (default:
 #                     run until the window is closed)
+#   NESTED_HELPER=1   nested mode: also load the test helper extension
+#                     (org.wporter.SnapTest: LaunchApp, ListWindows,
+#                     Screenshot) for scripted checks; off by default
 
 set -euo pipefail
 
@@ -53,7 +56,8 @@ if [[ -z ${E2E_INNER:-} ]]; then
     # candidate) without touching this one.
     EXT_SRC=${E2E_EXT_SRC:-$REPO/$UUID}
     cp -r "$EXT_SRC" "$EXT_DIR/$UUID"
-    if [[ -z ${E2E_NESTED:-} ]]; then
+    # Nested mode loads the test helper only with NESTED_HELPER=1.
+    if [[ -z ${E2E_NESTED:-} || -n ${NESTED_HELPER:-} ]]; then
         cp -r "$REPO/tests/e2e/$HELPER" "$EXT_DIR/"
     fi
     rm -f "$EXT_DIR/$UUID/schemas/gschemas.compiled"
@@ -70,42 +74,63 @@ if [[ -z ${E2E_INNER:-} ]]; then
             exit 1
         fi
         NESTED_ENV=(E2E_NESTED=1 E2E_HOST_WAYLAND="$HOST_WL"
-            NESTED_TIMEOUT="${NESTED_TIMEOUT:-}")
+            NESTED_TIMEOUT="${NESTED_TIMEOUT:-}" NESTED_HELPER="${NESTED_HELPER:-}")
     fi
 
-    # Private D-Bus configs. The session bus can only activate dconf (no
-    # portals, evolution, ...). A separate empty "system" bus keeps the
+    # Private D-Bus configs. The test session bus can only activate dconf
+    # (no portals, evolution, ...; nested mode: see below). A separate empty "system" bus keeps the
     # nested shell away from the host's logind/GDM/NetworkManager: with the
     # real system bus it would monitor the host login session, register it
     # with GDM and could set the host session's LockedHint.
     mkdir -p "$RUN/dbus/services"
     cp /usr/share/dbus-1/services/ca.desrt.dconf.service "$RUN/dbus/services/"
-    # Nested mode also allows the Extensions app, which shows extension
-    # preferences (top bar menu "Settings…" -> openPreferences()).
-    if [[ -n ${E2E_NESTED:-} ]]; then
-        cp /usr/share/dbus-1/services/org.gnome.Shell.Extensions.service "$RUN/dbus/services/"
-    fi
-    write_bus_conf() { # type listen-address servicedir|""
+    write_bus_conf() { # type listen-address servicedir|standard|"" file
         {
             echo '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"'
             echo ' "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">'
             echo "<busconfig><type>$1</type><listen>$2</listen>"
             echo '<auth>EXTERNAL</auth>'
-            [[ -n $3 ]] && echo "<servicedir>$3</servicedir>"
+            if [[ $3 == standard ]]; then
+                echo '<standard_session_servicedirs/>'
+            elif [[ -n $3 ]]; then
+                echo "<servicedir>$3</servicedir>"
+            fi
             echo '<policy context="default"><allow send_destination="*" eavesdrop="true"/>'
             echo '<allow eavesdrop="true"/><allow own="*"/></policy></busconfig>'
         } >"$4"
     }
+    SESSION_SERVICES=$RUN/dbus/services
     RT=$RUN/rt
+    if [[ -n ${E2E_NESTED:-} ]]; then
+        # Nested mode (Amendment 5): apps must open. Most GNOME apps are
+        # DBusActivatable (the shell launches them through
+        # org.freedesktop.Application on the session bus) and use gvfs,
+        # portals, keyring, ... So the private session bus activates every
+        # standard session service ($XDG_DATA_HOME, $XDG_DATA_DIRS and
+        # $XDG_RUNTIME_DIR dbus-1/services), each started with the private
+        # environment. The system bus stays private and empty.
+        SESSION_SERVICES=standard
+        # pipewire-0-manager, gvfs and app sockets under $RUN/rt overflow
+        # sun_path in deep checkouts: use a short private runtime dir,
+        # linked as $RUN/rt and removed afterwards.
+        RT=$(mktemp -d "${TMPDIR:-/tmp}/snapnest-XXXXXX")
+        chmod 0700 "$RT"
+        rmdir "$RUN/rt"
+        ln -s "$RT" "$RUN/rt"
+    fi
     # Fixed short socket names: unix:dir= appends dbus-XXXXXXXXXX, which
     # overflows sun_path (107 bytes) for deep checkouts such as worktrees.
-    write_bus_conf session "unix:path=$RUN/rt/bus" "$RUN/dbus/services" "$RUN/dbus/session.conf"
-    SYSTEM_SOCK=$RUN/rt/sysbus  # keep short: AF_UNIX paths max 107 bytes
+    write_bus_conf session "unix:path=$RT/bus" "$SESSION_SERVICES" "$RUN/dbus/session.conf"
+    SYSTEM_SOCK=$RT/sysbus  # keep short: AF_UNIX paths max 107 bytes
     write_bus_conf system "unix:path=$SYSTEM_SOCK" "" "$RUN/dbus/system.conf"
     dbus-daemon --config-file="$RUN/dbus/system.conf" --nofork --nopidfile \
         2>>"$RUN/session.log" &
     SYSTEM_BUS_PID=$!
-    trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true' EXIT
+    if [[ -n ${E2E_NESTED:-} ]]; then
+        trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true; rm -rf "$RT"' EXIT
+    else
+        trap 'kill "$SYSTEM_BUS_PID" 2>/dev/null || true' EXIT
+    fi
     for _ in $(seq 50); do
         [[ -S $SYSTEM_SOCK ]] && break
         sleep 0.1
@@ -172,8 +197,8 @@ if [[ -z ${E2E_INNER:-} ]]; then
     trap - EXIT
     if [[ -n ${E2E_NESTED:-} ]]; then
         trap - INT
-        # Leftover sockets (bus, pipewire, wayland) in the private runtime dir.
-        find "$RT" -type s -delete 2>/dev/null || true
+        # The private runtime dir (bus, pipewire, wayland, gvfs sockets).
+        rm -rf "$RT"
     fi
 
     AFTER=$(host_mtime)
@@ -205,7 +230,10 @@ DISPLAY_NAME=wl-$$  # short: $XDG_RUNTIME_DIR/<name> must fit sun_path
 # PipeWire, so a private pipewire + wireplumber (policy only: no ALSA,
 # Bluetooth, camera, logind or portal access) runs in the private
 # XDG_RUNTIME_DIR. Closing the viewer terminates the shell.
-# Session bus activation: dconf and org.gnome.Shell.Extensions (prefs) only.
+# Session bus activation: all standard session services (apps, gvfs,
+# portals, ...), started inside the private environment; there is no systemd
+# user manager on the private bus, so the shell cannot put launched apps into
+# transient scopes (a harmless "Could not create transient scope" warning).
 # Monitors: each viewer window is one virtual monitor sized by the window
 # (viewer menu: "Add Monitor"); --virtual-monitor would add a monitor that
 # no viewer window shows, so it is not offered here.
@@ -213,7 +241,11 @@ nested_main() {
     # Globals (not local): nested_cleanup may run from the EXIT trap.
     pw_pid='' wp_pid='' shell_pid='' viewer_pid='' state='' status=0
     gsettings set org.gnome.shell disable-user-extensions false
-    gsettings set org.gnome.shell enabled-extensions "['$UUID']"
+    if [[ -n ${NESTED_HELPER:-} ]]; then
+        gsettings set org.gnome.shell enabled-extensions "['$HELPER', '$UUID']"
+    else
+        gsettings set org.gnome.shell enabled-extensions "['$UUID']"
+    fi
     gsettings set org.gnome.shell welcome-dialog-last-shown-version '999'
     # The private session cannot unlock a lock screen (no GDM/PAM on the
     # empty system bus), so never lock or blank.
@@ -222,12 +254,37 @@ nested_main() {
     # Schema defaults for the extension, except debug logging.
     GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts debug true
     # Devkit menu launchers: run inside the nested session (the viewer adds
-    # the nested WAYLAND_DISPLAY). Plain commands, since D-Bus activation of
-    # apps is not available on the private bus.
+    # the nested WAYLAND_DISPLAY). The dash and app grid work as well.
     gsettings set org.gnome.mutter.devkit launchers \
         "[('exec', 'gnome-text-editor --standalone', ''), ('exec', 'nautilus --new-window', ''), ('exec', 'ptyxis --standalone', ''), ('exec', '/usr/bin/python3 $E2E_REPO/tests/e2e/client.py --title client', '')]"
-    # Bus-activated services (Extensions app for prefs) show on the nested display.
-    dbus-update-activation-environment WAYLAND_DISPLAY="$DISPLAY_NAME" GDK_BACKEND=wayland
+    # There is no systemd user manager here (the host's must not be used),
+    # so `systemd-run --user --scope CMD` cannot work. Ptyxis wraps every
+    # shell in it when `systemd-run --version` reports systemd, and shows
+    # "Failed to connect to user scope bus". This shim, first in PATH,
+    # reports no systemd and runs scope requests without a scope.
+    mkdir -p "$RUN/bin"
+    cat >"$RUN/bin/systemd-run" <<'EOF'
+#!/bin/sh
+# Nested-shell shim: no systemd user manager in the private session.
+[ "$1" = --version ] && { echo "nested-shell shim (no systemd user manager)"; exit 0; }
+case " $* " in *" --scope "*) ;; *) echo "systemd-run: not available in the nested shell" >&2; exit 1 ;; esac
+while [ $# -gt 0 ]; do
+    case $1 in
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+exec "$@"
+EOF
+    chmod +x "$RUN/bin/systemd-run"
+    export PATH="$RUN/bin:$PATH"
+    # gnome-control-center only runs under GNOME; portals pick their GNOME
+    # backend (talking to the nested shell) from it as well.
+    export XDG_CURRENT_DESKTOP=GNOME
+    # Bus-activated apps and services show on the nested display.
+    dbus-update-activation-environment WAYLAND_DISPLAY="$DISPLAY_NAME" GDK_BACKEND=wayland \
+        PATH="$PATH" XDG_CURRENT_DESKTOP=GNOME
 
     mkdir -p "$RUN/config/pipewire/pipewire.conf.d"
     cat >"$RUN/config/pipewire/pipewire.conf.d/50-nested.conf" <<'EOF'
@@ -295,7 +352,8 @@ EOF
         XDG_CONFIG_HOME "$XDG_CONFIG_HOME" XDG_DATA_HOME "$XDG_DATA_HOME" \
         XDG_CACHE_HOME "$XDG_CACHE_HOME" XDG_STATE_HOME "$XDG_STATE_HOME" \
         XDG_RUNTIME_DIR "$XDG_RUNTIME_DIR" XDG_SESSION_TYPE wayland \
-        XDG_DATA_DIRS "$XDG_DATA_DIRS" NO_AT_BRIDGE 1 GTK_A11Y none \
+        XDG_DATA_DIRS "$XDG_DATA_DIRS" XDG_CURRENT_DESKTOP GNOME \
+        NO_AT_BRIDGE 1 GTK_A11Y none \
         DBUS_SESSION_BUS_ADDRESS "$DBUS_SESSION_BUS_ADDRESS" \
         DBUS_SYSTEM_BUS_ADDRESS "$DBUS_SYSTEM_BUS_ADDRESS" \
         WAYLAND_DISPLAY "$DISPLAY_NAME" GDK_BACKEND wayland \
