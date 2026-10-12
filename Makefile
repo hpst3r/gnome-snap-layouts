@@ -39,9 +39,12 @@ uninstall:
 	-gnome-extensions disable $(UUID)
 	rm -f $(DEST)
 
-# Visible nested shell (devkit window) for manual testing; needs mutter-devkit.
-nested: install
-	dbus-run-session -- gnome-shell --devkit --wayland
+# Visible nested shell (devkit window) for manual testing, isolated like the
+# E2E harness (private dconf, buses, XDG dirs; the working tree's extension
+# is copied, not installed). Needs mutter-devkit. Start apps inside it with
+#   scripts/nested.sh --run gnome-text-editor --standalone
+nested:
+	scripts/nested.sh
 
 clean:
 	rm -rf build .e2e $(SRC)/schemas/gschemas.compiled
