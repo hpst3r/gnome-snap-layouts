@@ -17,6 +17,14 @@
 #   E2E_EXT_SRC=dir   extension directory to test (default ./snap-layouts@wporter.org)
 #   E2E_HOLD=1        keep the private shell running after the scenarios
 #                     until $RUN/hold is removed (debugging)
+#   E2E_NESTED=1      interactive mode (`make nested`, scripts/nested.sh):
+#                     instead of the headless test run, open a visible
+#                     mutter-devkit window on the host Wayland display with
+#                     only the extension under test enabled, at schema
+#                     defaults; no driver runs. Ends when the devkit window
+#                     is closed. See "Nested mode" below.
+#   NESTED_TIMEOUT=s  nested mode: stop the shell after s seconds (default:
+#                     run until the window is closed)
 
 set -euo pipefail
 
@@ -45,9 +53,25 @@ if [[ -z ${E2E_INNER:-} ]]; then
     # candidate) without touching this one.
     EXT_SRC=${E2E_EXT_SRC:-$REPO/$UUID}
     cp -r "$EXT_SRC" "$EXT_DIR/$UUID"
-    cp -r "$REPO/tests/e2e/$HELPER" "$EXT_DIR/"
+    if [[ -z ${E2E_NESTED:-} ]]; then
+        cp -r "$REPO/tests/e2e/$HELPER" "$EXT_DIR/"
+    fi
     rm -f "$EXT_DIR/$UUID/schemas/gschemas.compiled"
     glib-compile-schemas "$EXT_DIR/$UUID/schemas"
+
+    # Nested mode: the only thing taken from the host is the Wayland display
+    # socket, passed by absolute path so the private XDG_RUNTIME_DIR stays.
+    NESTED_ENV=()
+    if [[ -n ${E2E_NESTED:-} ]]; then
+        HOST_WL=${WAYLAND_DISPLAY:-}
+        [[ -n $HOST_WL && $HOST_WL != /* ]] && HOST_WL=${XDG_RUNTIME_DIR:-}/$HOST_WL
+        if [[ -z ${WAYLAND_DISPLAY:-} || ! -S $HOST_WL ]]; then
+            echo "nested mode needs a host Wayland session (WAYLAND_DISPLAY='${WAYLAND_DISPLAY:-}')" >&2
+            exit 1
+        fi
+        NESTED_ENV=(E2E_NESTED=1 E2E_HOST_WAYLAND="$HOST_WL"
+            NESTED_TIMEOUT="${NESTED_TIMEOUT:-}")
+    fi
 
     # Private D-Bus configs. The session bus can only activate dconf (no
     # portals, evolution, ...). A separate empty "system" bus keeps the
@@ -56,6 +80,11 @@ if [[ -z ${E2E_INNER:-} ]]; then
     # with GDM and could set the host session's LockedHint.
     mkdir -p "$RUN/dbus/services"
     cp /usr/share/dbus-1/services/ca.desrt.dconf.service "$RUN/dbus/services/"
+    # Nested mode also allows the Extensions app, which shows extension
+    # preferences (top bar menu "Settings…" -> openPreferences()).
+    if [[ -n ${E2E_NESTED:-} ]]; then
+        cp /usr/share/dbus-1/services/org.gnome.Shell.Extensions.service "$RUN/dbus/services/"
+    fi
     write_bus_conf() { # type listen-address servicedir|""
         {
             echo '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"'
@@ -86,12 +115,42 @@ if [[ -z ${E2E_INNER:-} ]]; then
         exit 1
     fi
 
+    # Nested mode: every process of the private session (shell, devkit
+    # viewer, pipewire, bus-activated services, clients started with
+    # scripts/nested.sh --run) carries E2E_RUN=$RUN; stop any survivors.
+    run_pids() {
+        local p
+        for p in /proc/[0-9]*; do
+            [[ -O $p ]] || continue
+            if tr '\0' '\n' 2>/dev/null <"$p/environ" | grep -qxF "E2E_RUN=$1"; then
+                echo "${p#/proc/}"
+            fi
+        done
+    }
+    reap_nested() {
+        local pids sig
+        for sig in TERM KILL; do
+            for _ in $(seq 30); do
+                pids=$(run_pids "$1")
+                [[ -z $pids ]] && return 0
+                sleep 0.1
+            done
+            echo "stopping leftover processes (SIG$sig): $(echo $pids)"
+            # shellcheck disable=SC2086
+            kill -s "$sig" $pids 2>/dev/null || true
+        done
+    }
+
     HOST_DCONF=$HOME/.config/dconf/user
     host_mtime() { stat -c '%.9Y' "$HOST_DCONF" 2>/dev/null || echo missing; }
     BEFORE=$(host_mtime)
 
     status=0
+    # Nested mode: Ctrl+C reaches every process in the terminal's group;
+    # keep going here so the cleanup and isolation check below still run.
+    [[ -n ${E2E_NESTED:-} ]] && trap 'echo "interrupted"' INT
     env -i \
+        "${NESTED_ENV[@]}" \
         DBUS_SYSTEM_BUS_ADDRESS="unix:path=$SYSTEM_SOCK" \
         HOME="$RUN/home" USER="${USER:-}" LOGNAME="${LOGNAME:-}" \
         PATH="/usr/local/bin:/usr/bin:/bin" LANG=C.UTF-8 \
@@ -107,9 +166,15 @@ if [[ -z ${E2E_INNER:-} ]]; then
         dbus-run-session --config-file="$RUN/dbus/session.conf" \
         -- "$REPO/scripts/e2e.sh" "$@" \
         2>>"$RUN/session.log" || status=$?
+    [[ -n ${E2E_NESTED:-} ]] && reap_nested "$RUN"
     kill "$SYSTEM_BUS_PID" 2>/dev/null || true
     wait "$SYSTEM_BUS_PID" 2>/dev/null || true
     trap - EXIT
+    if [[ -n ${E2E_NESTED:-} ]]; then
+        trap - INT
+        # Leftover sockets (bus, pipewire, wayland) in the private runtime dir.
+        find "$RT" -type s -delete 2>/dev/null || true
+    fi
 
     AFTER=$(host_mtime)
     echo "host dconf mtime before: $BEFORE"
@@ -127,6 +192,150 @@ RUN=$E2E_RUN
 LOG=$RUN/gnome-shell.log
 EXT_SCHEMAS=$RUN/data/gnome-shell/extensions/$UUID/schemas
 DISPLAY_NAME=wl-$$  # short: $XDG_RUNTIME_DIR/<name> must fit sun_path
+
+# ---- Nested mode (E2E_NESTED=1): a visible, interactive shell.
+#
+# `gnome-shell --devkit` runs mutter's headless backend and spawns
+# /usr/libexec/mutter-devkit, a GTK viewer that inherits the shell's
+# environment except WAYLAND_DISPLAY, which mutter resets to the value the
+# shell itself was started with (here: the host socket's absolute path, so
+# the viewer is the only client of the host compositor). The viewer talks to
+# the nested shell over the PRIVATE session bus (org.gnome.Mutter.Devkit,
+# ScreenCast, RemoteDesktop/EIS) and receives the monitor frames over
+# PipeWire, so a private pipewire + wireplumber (policy only: no ALSA,
+# Bluetooth, camera, logind or portal access) runs in the private
+# XDG_RUNTIME_DIR. Closing the viewer terminates the shell.
+# Session bus activation: dconf and org.gnome.Shell.Extensions (prefs) only.
+# Monitors: each viewer window is one virtual monitor sized by the window
+# (viewer menu: "Add Monitor"); --virtual-monitor would add a monitor that
+# no viewer window shows, so it is not offered here.
+nested_main() {
+    # Globals (not local): nested_cleanup may run from the EXIT trap.
+    pw_pid='' wp_pid='' shell_pid='' viewer_pid='' state='' status=0
+    gsettings set org.gnome.shell disable-user-extensions false
+    gsettings set org.gnome.shell enabled-extensions "['$UUID']"
+    gsettings set org.gnome.shell welcome-dialog-last-shown-version '999'
+    # The private session cannot unlock a lock screen (no GDM/PAM on the
+    # empty system bus), so never lock or blank.
+    gsettings set org.gnome.desktop.session idle-delay 0
+    gsettings set org.gnome.desktop.screensaver lock-enabled false
+    # Schema defaults for the extension, except debug logging.
+    GSETTINGS_SCHEMA_DIR=$EXT_SCHEMAS gsettings set org.gnome.shell.extensions.snap-layouts debug true
+    # Devkit menu launchers: run inside the nested session (the viewer adds
+    # the nested WAYLAND_DISPLAY). Plain commands, since D-Bus activation of
+    # apps is not available on the private bus.
+    gsettings set org.gnome.mutter.devkit launchers \
+        "[('exec', 'gnome-text-editor --standalone', ''), ('exec', 'nautilus --new-window', ''), ('exec', 'ptyxis --standalone', ''), ('exec', '/usr/bin/python3 $E2E_REPO/tests/e2e/client.py --title client', '')]"
+    # Bus-activated services (Extensions app for prefs) show on the nested display.
+    dbus-update-activation-environment WAYLAND_DISPLAY="$DISPLAY_NAME" GDK_BACKEND=wayland
+
+    mkdir -p "$RUN/config/pipewire/pipewire.conf.d"
+    cat >"$RUN/config/pipewire/pipewire.conf.d/50-nested.conf" <<'EOF'
+# Private pipewire for the devkit viewer: no realtime (RTKit), portal,
+# X11 bell or JACK D-Bus detection.
+context.properties = {
+    module.rt = false
+    module.portal = false
+    module.x11.bell = false
+    module.jackdbus-detect = false
+}
+EOF
+    pipewire >"$RUN/pipewire.log" 2>&1 &
+    pw_pid=$!
+    for _ in $(seq 50); do
+        [[ -S $XDG_RUNTIME_DIR/pipewire-0 ]] && break
+        sleep 0.1
+    done
+    if [[ ! -S $XDG_RUNTIME_DIR/pipewire-0 ]]; then
+        echo "private pipewire failed to start (see $RUN/pipewire.log)"
+        kill "$pw_pid" 2>/dev/null || true
+        return 1
+    fi
+    wireplumber --profile policy >"$RUN/wireplumber.log" 2>&1 &
+    wp_pid=$!
+
+    env -u GSK_RENDERER WAYLAND_DISPLAY="$E2E_HOST_WAYLAND" \
+        gnome-shell --devkit --wayland --no-x11 \
+        --wayland-display "$DISPLAY_NAME" >"$LOG" 2>&1 &
+    shell_pid=$!
+
+    nested_cleanup() {
+        local pid
+        for pid in "$shell_pid" "$wp_pid" "$pw_pid"; do
+            [[ -n $pid ]] || continue
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 50); do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 0.1
+            done
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+        done
+    }
+    trap nested_cleanup EXIT
+
+    # Ready = the devkit viewer is running and the extension is ACTIVE.
+    state=''
+    viewer_pid=''
+    for _ in $(seq 300); do
+        if ! kill -0 "$shell_pid" 2>/dev/null; then
+            echo "gnome-shell exited during startup; log tail:"
+            tail -n 40 "$LOG"
+            return 1
+        fi
+        [[ -n $viewer_pid ]] || viewer_pid=$(pgrep -P "$shell_pid" -x mutter-devkit || true)
+        state=$(gnome-extensions info "$UUID" 2>/dev/null | sed -n 's/^ *State: //p')
+        [[ -n $viewer_pid && $state == ACTIVE ]] && break
+        sleep 0.1
+    done
+
+    printf '%s=%q\n' \
+        E2E_RUN "$RUN" HOME "$HOME" USER "$USER" LOGNAME "$LOGNAME" \
+        PATH "$PATH" LANG "$LANG" \
+        XDG_CONFIG_HOME "$XDG_CONFIG_HOME" XDG_DATA_HOME "$XDG_DATA_HOME" \
+        XDG_CACHE_HOME "$XDG_CACHE_HOME" XDG_STATE_HOME "$XDG_STATE_HOME" \
+        XDG_RUNTIME_DIR "$XDG_RUNTIME_DIR" XDG_SESSION_TYPE wayland \
+        XDG_DATA_DIRS "$XDG_DATA_DIRS" NO_AT_BRIDGE 1 GTK_A11Y none \
+        DBUS_SESSION_BUS_ADDRESS "$DBUS_SESSION_BUS_ADDRESS" \
+        DBUS_SYSTEM_BUS_ADDRESS "$DBUS_SYSTEM_BUS_ADDRESS" \
+        WAYLAND_DISPLAY "$DISPLAY_NAME" GDK_BACKEND wayland \
+        NESTED_SHELL_PID "$shell_pid" NESTED_SHELL_LOG "$LOG" \
+        >"$RUN/nested.env"
+
+    cat <<EOF
+nested gnome-shell pid $shell_pid, devkit viewer pid ${viewer_pid:-NOT RUNNING}
+extension $UUID: ${state:-unknown}
+wayland display $XDG_RUNTIME_DIR/$DISPLAY_NAME, shell log $LOG
+launch apps inside (devkit menu has launchers too):
+  $E2E_REPO/scripts/nested.sh --run gnome-text-editor --standalone
+  $E2E_REPO/scripts/nested.sh --run /usr/bin/python3 $E2E_REPO/tests/e2e/client.py
+  (private environment: $RUN/nested.env)
+close the devkit window (or Ctrl+C) to stop.
+EOF
+    if [[ -z $viewer_pid || $state != ACTIVE ]]; then
+        echo "WARNING: nested session not fully up (see $LOG, $RUN/session.log)"
+    fi
+
+    status=0
+    if [[ -n ${NESTED_TIMEOUT:-} ]]; then
+        sleep "$NESTED_TIMEOUT" &
+        timer_pid=$!
+        wait -n "$shell_pid" "$timer_pid" || true
+        kill "$timer_pid" 2>/dev/null || true
+        kill -TERM "$shell_pid" 2>/dev/null || true
+    fi
+    wait "$shell_pid" || status=$?
+    echo "gnome-shell exited (status $status)"
+    nested_cleanup
+    trap - EXIT
+    grep -En 'JS ERROR|Extension [^ ]+@[^ ]+:|Could not load extension|(CRITICAL|WARNING).*snap-?layouts' \
+        "$LOG" | head -n 20 || true
+    return 0
+}
+if [[ -n ${E2E_NESTED:-} ]]; then
+    nested_main
+    exit
+fi
 
 # Only enable the extension under test if it actually has an extension.js;
 # otherwise the harness itself (smoke) can still be exercised.

@@ -10,6 +10,8 @@ make test     # unit tests (gjs)
 make check    # + syntax and schema checks
 make pack     # build/snap-layouts@wporter.org.shell-extension.zip
 make e2e      # headless nested gnome-shell, real pointer drags
+make nested   # isolated nested gnome-shell in a window (mutter-devkit); apps:
+              #   scripts/nested.sh --run gnome-text-editor --standalone
 make install  # symlink into ~/.local/share/gnome-shell/extensions (re-login on Wayland)
 ```
 
