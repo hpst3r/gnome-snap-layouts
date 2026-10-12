@@ -29,6 +29,11 @@
       <default>true</default>
       <summary>Offer other windows for the remaining zones after a snap</summary>
     </key>
+    <key name="assist-skip-occupied" type="b">
+      <default>true</default>
+      <summary>Snap Assist skips zones that already hold a window</summary>
+      <description>Like Windows 11: after a snap, zones of the chosen layout already filled by another window are not offered, and those windows are not suggested.</description>
+    </key>
     <key name="disabled-layouts" type="as">
       <default>[]</default>
       <summary>Built-in layout ids hidden from the picker</summary>

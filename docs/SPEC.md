@@ -313,6 +313,33 @@ host Wayland display socket. `scripts/nested.sh --run CMD` starts a client
 inside the newest nested shell. Extra monitors: use the viewer's "Add
 Monitor" menu (devkit monitors are viewer windows, not `--virtual-monitor`).
 
+## Amendment 5 (Snap Assist skips occupied zones; nested usability)
+
+### `assist-skip-occupied` (b, default true)
+After a picker snap into layout L on monitor M, a remaining zone Z of L is
+**occupied** when some other window W — normal, not transient, not
+minimized, on the active workspace and on M, not the dragged window — has a
+frame rect R with `area(R ∩ Z) ≥ 0.9·area(Z)` and `area(R ∩ Z) ≥ 0.9·area(R)`
+(tolerates terminals' character-grid sizing). With the setting on:
+occupied zones are not passed to Snap Assist; windows occupying any zone of
+L are excluded from its candidates (seam addition: optional
+`p.excludeWindows: Meta.Window[]` in `showSnapAssist`); if no zones remain,
+Snap Assist is not shown. With it off, behaviour is unchanged. Pure helper
+in `lib/layouts.js`: `rectCoverage(zone, frame) -> {ofZone, ofFrame}` and
+`occupiedZoneIndices(zoneRects, frameRects, threshold = 0.9) -> Set<number>`.
+Prefs: switch under Snapping, below Snap Assist ("Skip zones already
+filled"), insensitive when Snap Assist is off. Top bar menu unchanged.
+
+### Nested shell usability
+The user found the fully isolated `make nested` unusable (no GNOME app
+opens: session-bus activation was restricted to dconf + Extensions). The
+user accepts less isolation for the interactive nested shell. Hard
+requirements that remain: host dconf never written; host GNOME session's
+extension state and settings untouched; the HOST session bus is never
+used. Relax whatever else is necessary (standard session service
+activation on the private bus; host system bus only if an essential app
+path needs it — document why).
+
 ## Later (not this wave)
 
 - Modular/dynamic layout: drag over a region of a free-form grid in the
