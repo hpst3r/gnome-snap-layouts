@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure picker visibility state machine for one window drag. No gi imports.
 //
-//   armed --(in band)--> pending --(show delay elapsed)--> shown
-//     ^                     |                                |
-//     +----(left band)------+      (outside band and picker  |
-//     +------------------------------ for HIDE_DELAY_MS) ----+
+//   blocked --(left band)--> armed --(in band)--> pending --(show delay)--> shown
+//                              ^                     |                        |
+//                              +----(left band)------+  (outside band and     |
+//                              +------------------------ picker for HIDE_DELAY_MS)
+//
+// A drag that begins with the pointer inside the band (e.g. on the headerbar
+// of a maximized window) starts `blocked`, so it only arms once the pointer
+// has left the band.
 //
 // "Hovering" is not a separate phase: while shown, the hovered cell is
 // whatever hitTest() returns for the pointer.
@@ -17,10 +21,12 @@ export const PICKER_MARGIN = 24;
 /**
  * Initial state of a new drag: never starts with a picker.
  *
+ * @param {boolean} [startsInBand] the pointer is inside the trigger band
+ *   when the drag begins; the drag then arms only after leaving the band
  * @returns {{phase: string, monitor: number, since: ?number}}
  */
-export function initialDragState() {
-    return Object.freeze({phase: 'armed', monitor: -1, since: null});
+export function initialDragState(startsInBand = false) {
+    return Object.freeze({phase: startsInBand ? 'blocked' : 'armed', monitor: -1, since: null});
 }
 
 /**
@@ -39,6 +45,9 @@ export function initialDragState() {
  */
 export function stepDragState(state, {now, monitor, inBand, inPicker, showDelay}) {
     switch (state.phase) {
+    case 'blocked':
+        return inBand ? state : initialDragState();
+
     case 'armed':
         if (!inBand)
             return state;

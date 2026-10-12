@@ -20,7 +20,6 @@ export default class SnapLayoutsExtension extends Extension {
         });
         this._idleIds = new Set();
         this._assist = null;
-        this._assistToken = null;
 
         this._tiler = new Tiler(this._log.bind(this));
         this._watcher = new DragWatcher({
@@ -75,7 +74,10 @@ export default class SnapLayoutsExtension extends Extension {
 
     _onGrabBegin(window, op) {
         this._closeAssist();
-        if (window && isPointerMove(op))
+        if (!window)
+            return;
+        this._tiler.onGrabBegin(window);
+        if (isPointerMove(op))
             this._tiler.onMoveBegin(window, this._getConfig().restore);
     }
 
@@ -101,38 +103,25 @@ export default class SnapLayoutsExtension extends Extension {
 
     _openAssist({window, monitorIndex, workArea, zones}) {
         this._closeAssist();
-        const token = {};
-        this._assistToken = token;
-        let closed = false;
-        let handle = null;
+        // Keep the handle until the next assist, grab or disable even after
+        // onClosed: destroy() is idempotent and also ends a closing fade.
         try {
-            handle = showSnapAssist({
+            this._assist = showSnapAssist({
                 window,
                 monitorIndex,
                 workArea,
                 zones,
                 snapWindow: (win, rect) => this._tiler?.snap(win, rect),
-                onClosed: () => {
-                    closed = true;
-                    if (this._assistToken === token) {
-                        this._assistToken = null;
-                        this._assist = null;
-                    }
-                },
+                onClosed: () => {},
             });
         } catch (e) {
             console.error('[snap-layouts] snap assist failed:', e);
-            this._assistToken = null;
-            return;
         }
-        if (!closed && this._assistToken === token)
-            this._assist = handle;
     }
 
     _closeAssist() {
         const assist = this._assist;
         this._assist = null;
-        this._assistToken = null;
         assist?.destroy();
     }
 }

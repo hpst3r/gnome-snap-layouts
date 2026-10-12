@@ -22,16 +22,18 @@ if (GLib.getenv('SNAP_REVIEW') !== '1') {
             failures++;
     };
 
-    // 1920x1080 monitor, 32 px top bar; defaults trigger-width 40, height 48.
+    // 1920x1080 monitor, 32 px top bar; trigger-width 40.
     const monitor = {x: 0, y: 0, width: 1920, height: 1080};
     const workArea = {x: 0, y: 32, width: 1920, height: 1048};
-    const cfg = {triggerWidthPct: 40, triggerHeight: 48};
 
     // The trigger band must not cover picker cells: otherwise the pointer is
     // already on a zone the moment the picker appears and a plain release
     // near the top snaps the window (see review-trigger-accidental-snap).
-    {
-        const geo = pickerGeometry(monitor, workArea, BUILTIN_LAYOUTS);
+    // Amendment 2: the picker sits below the band, for any trigger-height
+    // (the old default 48 and the new default 8 included).
+    for (const triggerHeight of [8, 48, 200]) {
+        const cfg = {triggerWidthPct: 40, triggerHeight};
+        const geo = pickerGeometry(monitor, workArea, BUILTIN_LAYOUTS, {triggerHeight});
         const overlapping = [];
         for (const t of geo.thumbs) {
             for (const c of t.cells) {
@@ -42,8 +44,9 @@ if (GLib.getenv('SNAP_REVIEW') !== '1') {
             }
         }
         check(overlapping.length === 0, 'band-vs-cells',
-            `cells reachable from inside the trigger band (y < ${workArea.y + cfg.triggerHeight}, ` +
-            `first picker row starts at y ${geo.thumbs[0].cells[0].y}): ${overlapping.join(', ')}`);
+            `trigger-height ${triggerHeight}: cells reachable from inside the trigger band ` +
+            `(y < ${workArea.y + cfg.triggerHeight}, first picker row starts at y ` +
+            `${geo.thumbs[0].cells[0].y}): ${overlapping.join(', ')}`);
     }
 
     // Snap Assist: in a 960x1048 half zone with 2 candidates Windows 11 shows

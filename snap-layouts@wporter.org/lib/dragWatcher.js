@@ -30,7 +30,8 @@ export function isPointerMove(op) {
 }
 
 /**
- * Whether a window may be snapped from the picker.
+ * Whether a window may be snapped from the picker. Transient windows
+ * (dialogs and other children of a parent window) never are.
  *
  * @param {Meta.Window} window
  * @returns {boolean}
@@ -38,6 +39,7 @@ export function isPointerMove(op) {
 export function isEligible(window) {
     return !!window &&
         window.get_window_type() === Meta.WindowType.NORMAL &&
+        !window.get_transient_for() &&
         window.allows_move() &&
         !window.is_fullscreen();
 }
@@ -64,6 +66,8 @@ export class DragWatcher {
             global.display.connect('grab-op-begin', (_d, window, op) => this._begin(window, op)),
             global.display.connect('grab-op-end', (_d, window) => this._end(window)),
         ];
+        this._monitorsChangedId = Main.layoutManager.connect('monitors-changed',
+            () => this._resetSession());
     }
 
     _begin(window, op) {
@@ -75,7 +79,7 @@ export class DragWatcher {
         this._log('drag begin', window.get_id(), op);
         this._session = {
             window,
-            state: initialDragState(),
+            state: initialDragState(this._sample(this._getConfig())?.inBand),
             picker: null,
             geometry: null,
             layouts: [],
@@ -109,22 +113,38 @@ export class DragWatcher {
             this._onDrop(drop);
     }
 
+    /**
+     * Pointer position and whether it is in the trigger band of the monitor
+     * under it; null while no monitor is known.
+     *
+     * @param {object} cfg settings snapshot
+     * @returns {?{px: number, py: number, monitorIndex: number, inBand: boolean}}
+     */
+    _sample(cfg) {
+        const [px, py] = global.get_pointer();
+        const monitorIndex = global.display.get_current_monitor();
+        const monitor = Main.layoutManager.monitors[monitorIndex];
+        if (!monitor)
+            return null;
+        const workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+        const inBand = inTriggerBand(monitor, workArea, px, py, cfg);
+        return {px, py, monitorIndex, inBand};
+    }
+
     _tick() {
         const s = this._session;
         if (!s)
             return;
         const cfg = this._getConfig();
-        const [px, py] = global.get_pointer();
-        const monitorIndex = global.display.get_current_monitor();
-        const monitor = Main.layoutManager.monitors[monitorIndex];
-        if (!monitor)
+        const sample = this._sample(cfg);
+        if (!sample)
             return;
-        const workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+        const {px, py, monitorIndex, inBand} = sample;
 
         const next = stepDragState(s.state, {
             now: GLib.get_monotonic_time() / 1000,
             monitor: monitorIndex,
-            inBand: inTriggerBand(monitor, workArea, px, py, cfg),
+            inBand,
             inPicker: s.geometry ? pointerInPicker(s.geometry, px, py, PICKER_MARGIN) : false,
             showDelay: cfg.showDelay,
         });
@@ -160,7 +180,8 @@ export class DragWatcher {
         s.monitorIndex = monitorIndex;
         s.workArea = {x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height};
         s.layouts = cfg.layouts;
-        s.geometry = pickerGeometry(monitor, s.workArea, s.layouts, {scale});
+        s.geometry = pickerGeometry(monitor, s.workArea, s.layouts,
+            {scale, triggerHeight: cfg.triggerHeight});
         s.picker = new Picker(s.geometry, s.layouts, {window: s.window});
         s.hit = null;
         this._log('picker shown on monitor', monitorIndex);
@@ -173,6 +194,23 @@ export class DragWatcher {
         s.geometry = null;
         s.hit = null;
         this._log('picker hidden');
+    }
+
+    /**
+     * Monitor layout changed mid-drag: the picker geometry is stale, so hide
+     * it and start over as if the drag had just begun.
+     */
+    _resetSession() {
+        const s = this._session;
+        if (!s)
+            return;
+        if (s.picker)
+            this._hidePicker();
+        s.state = initialDragState(this._sample(this._getConfig())?.inBand);
+        s.monitorIndex = -1;
+        s.workArea = null;
+        s.layouts = [];
+        this._log('monitors changed: drag reset');
     }
 
     _endSession() {
@@ -192,5 +230,9 @@ export class DragWatcher {
         for (const id of this._signalIds)
             global.display.disconnect(id);
         this._signalIds = [];
+        if (this._monitorsChangedId) {
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+            this._monitorsChangedId = 0;
+        }
     }
 }
