@@ -4,13 +4,38 @@
 // (mutter holds the pointer grab during a move, so no St hover events).
 
 import Clutter from 'gi://Clutter';
+import Graphene from 'gi://Graphene';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const FADE_MS = 120;
+// Pop in/out like GNOME's panel menus (boxpointer.js PopupAnimation.FULL:
+// POPUP_ANIMATION_TIME 150 ms, scale 0.96, slide by -arrow-rise = 6 px,
+// pivot at the edge it hangs from).
+const POP_MS = 150;
+const POP_SCALE = 0.96;
+const POP_RISE = 6;
 // Like mutter's tile preview (windowManager.js WINDOW_ANIMATION_TIME).
 const PREVIEW_MS = 250;
+
+// Pickers still playing their pop-out; destroyClosingPickers() ends them.
+const closing = new Set();
+
+/** Destroy every picker that is still animating out (used on disable). */
+export function destroyClosingPickers() {
+    // Empty the set first: stopping the transition runs onStopped, which
+    // must not destroy the actor a second time.
+    const roots = [...closing];
+    closing.clear();
+    for (const root of roots) {
+        root.remove_all_transitions();
+        root.destroy();
+    }
+}
+
+function popRise() {
+    return POP_RISE * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+}
 
 export class Picker {
     /**
@@ -43,6 +68,10 @@ export class Picker {
             width: geometry.width,
             height: geometry.height,
             opacity: 0,
+            pivot_point: new Graphene.Point({x: 0.5, y: 0}),
+            scale_x: POP_SCALE,
+            scale_y: POP_SCALE,
+            translation_y: -popRise(),
         });
 
         for (const t of geometry.thumbs) {
@@ -73,9 +102,13 @@ export class Picker {
         // one on every hover, so it never tints the window being dropped.
         global.window_group.add_child(this._preview);
         Main.layoutManager.uiGroup.add_child(this._root);
+        // Slide down from the top bar while growing to full size.
         this._root.ease({
             opacity: 255,
-            duration: FADE_MS,
+            scale_x: 1,
+            scale_y: 1,
+            translation_y: 0,
+            duration: POP_MS,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
     }
@@ -159,16 +192,47 @@ export class Picker {
         return {x: x1, y: y1, width: x2 - x1, height: y2 - y1};
     }
 
-    /** Destroy picker and preview actors. Idempotent. */
-    destroy() {
-        for (const actor of [this._root, this._preview]) {
-            if (!actor)
-                continue;
-            actor.remove_all_transitions();
-            actor.destroy();
-        }
+    /**
+     * Remove the picker and preview. Idempotent. The preview goes at once;
+     * the picker pops out (reverse of its pop-in) unless `animate` is false.
+     * A closing picker loses its actor names, so it is never mistaken for
+     * the live one.
+     *
+     * @param {object} [opts]
+     * @param {boolean} [opts.animate=true] play the pop-out
+     */
+    destroy({animate = true} = {}) {
+        const root = this._root;
+        const preview = this._preview;
         this._root = null;
         this._preview = null;
+        if (preview) {
+            preview.remove_all_transitions();
+            preview.destroy();
+        }
+        if (root) {
+            root.remove_all_transitions();
+            if (animate && root.mapped) {
+                root.name = '';
+                for (const cell of this._cells.values())
+                    cell.name = '';
+                closing.add(root);
+                root.ease({
+                    opacity: 0,
+                    scale_x: POP_SCALE,
+                    scale_y: POP_SCALE,
+                    translation_y: -popRise(),
+                    duration: POP_MS,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    onStopped: () => {
+                        if (closing.delete(root))
+                            root.destroy();
+                    },
+                });
+            } else {
+                root.destroy();
+            }
+        }
         this._cells.clear();
     }
 }

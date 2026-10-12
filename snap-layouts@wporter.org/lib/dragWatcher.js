@@ -12,7 +12,7 @@ import {
     hitTest, inTriggerBand, layoutsForWorkArea, pickerGeometry, pointerInPicker, zoneRect,
 } from './layouts.js';
 import {initialDragState, stepDragState, PICKER_MARGIN} from './dragState.js';
-import {Picker} from './picker.js';
+import {Picker, destroyClosingPickers} from './picker.js';
 
 const POLL_MS = 16;  // ~60 Hz
 
@@ -196,9 +196,9 @@ export class DragWatcher {
         this._log('picker shown on monitor', monitorIndex);
     }
 
-    _hidePicker() {
+    _hidePicker({animate = true} = {}) {
         const s = this._session;
-        s.picker?.destroy();
+        s.picker?.destroy({animate});
         s.picker = null;
         s.geometry = null;
         s.hit = null;
@@ -214,7 +214,7 @@ export class DragWatcher {
         if (!s)
             return;
         if (s.picker)
-            this._hidePicker();
+            this._hidePicker({animate: false});
         s.state = initialDragState(this._sample(this._getConfig())?.inBand);
         s.monitorIndex = -1;
         s.workArea = null;
@@ -222,20 +222,21 @@ export class DragWatcher {
         this._log('monitors changed: drag reset');
     }
 
-    _endSession() {
+    _endSession({animate = true} = {}) {
         if (this._pollId) {
             GLib.source_remove(this._pollId);
             this._pollId = 0;
         }
         if (!this._session)
             return;
-        this._session.picker?.destroy();
+        this._session.picker?.destroy({animate});
         this._session = null;
     }
 
     /** Disconnect signals, stop polling and destroy the picker. */
     destroy() {
-        this._endSession();
+        this._endSession({animate: false});
+        destroyClosingPickers();
         for (const id of this._signalIds)
             global.display.disconnect(id);
         this._signalIds = [];
