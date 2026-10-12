@@ -34,7 +34,8 @@
 }
 
 .snap-layouts-picker.light .snap-layouts-cell {
-    background-color: rgba(0, 0, 0, 0.18);
+    /* ~3:1 against the light picker (WCAG 1.4.11 non-text contrast). */
+    background-color: rgba(0, 0, 0, 0.42);
 }
 
 .snap-layouts-picker.light .snap-layouts-cell:hover {

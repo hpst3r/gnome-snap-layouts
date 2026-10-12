@@ -10,7 +10,7 @@ import GLib from 'gi://GLib';
 import {
     BUILTIN_LAYOUTS, inTriggerBand, pickerGeometry, hitTest,
 } from '../snap-layouts@wporter.org/lib/layouts.js';
-import {gridForZone} from '../snap-layouts@wporter.org/lib/snapAssistModel.js';
+import {assistMetrics, gridForZone} from '../snap-layouts@wporter.org/lib/snapAssistModel.js';
 
 if (GLib.getenv('SNAP_REVIEW') !== '1') {
     print('review_ux_test: skipped (set SNAP_REVIEW=1)');
@@ -51,13 +51,10 @@ if (GLib.getenv('SNAP_REVIEW') !== '1') {
 
     // Snap Assist: in a 960x1048 half zone with 2 candidates Windows 11 shows
     // large thumbnails; expect each to use >= 50% of the zone width.
-    // (Constants as in lib/snapAssist.js at scale 1.)
+    // (Uses the module's real metrics at scale 1, i.e. the shipped outcome.)
     {
         const zone = {x: 960, y: 32, width: 960, height: 1048};
-        const g = gridForZone(zone, 2, {
-            aspect: 1920 / 1048, minThumb: 96, maxThumb: 320,
-            spacing: 12, padding: 16, labelHeight: 28,
-        });
+        const g = gridForZone(zone, 2, {aspect: 1920 / 1048, ...assistMetrics(zone, 2)});
         check(g.thumbW >= zone.width / 2, 'assist-thumb-size',
             `thumbW ${g.thumbW} px in a ${zone.width} px zone (${g.cols}x${g.rows}), ` +
             `content ${g.contentWidth}x${g.contentHeight} of ${g.innerW}x${g.innerH}`);
