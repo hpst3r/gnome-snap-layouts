@@ -210,6 +210,25 @@ Any gnome-shell you start must be `dbus-run-session` + `--headless` with
 `XDG_RUNTIME_DIR` pointing at a fresh dir under `$REPO/.e2e/` (gitignored), a
 unique `--wayland-display`, and `--no-x11`. Kill it by PID when done.
 
+## Amendment 1 (after wave 1 merge)
+
+- **Isolation:** `dbus-run-session` + private XDG dirs is NOT enough — the
+  nested shell otherwise reaches the HOST system bus (logind session
+  monitoring, GDM RegisterSession, possible SetLockedHint/inhibitors). Any
+  headless shell must be started through `scripts/e2e.sh` (private system
+  bus, dconf-only session bus); use `E2E_HOLD=1` or its scenario hooks for
+  ad-hoc work. Never start gnome-shell any other way.
+- **Zone order** is row-major / reading order: quadrants 0=TL 1=TR 2=BL 3=BR;
+  half-left-quarters-right [left, right-top, right-bottom];
+  quarters-left-half-right [left-top, left-bottom, right].
+- **Snap Assist:** thumbnails are offered for one remaining zone at a time (the
+  next in zone order); later zones show as dim placeholders. `onClosed` may
+  fire asynchronously (idle) when there is nothing to offer; callers must not
+  rely on it having fired when `showSnapAssist` returns.
+- The extension must tolerate being disabled/re-enabled at any moment
+  (including mid-drag and while assist is open), e.g. by another extension's
+  toggle.
+
 ## Later (not this wave)
 
 - Modular/dynamic layout: drag over a region of a free-form grid in the
