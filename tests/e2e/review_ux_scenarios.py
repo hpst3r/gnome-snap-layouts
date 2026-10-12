@@ -492,7 +492,7 @@ def sc_hidpi(ctx):
         win = place_on(ctx, win, hi, 200, 200, 800, 500)
         ctx.begin_drag(win)
         cx = hi["rect"]["x"] + hi["rect"]["width"] / 2
-        ctx.glide(cx, hi["rect"]["y"] + 10, steps=25)
+        ctx.glide(cx, hi["rect"]["y"] + 2, steps=25)
         picker = ctx.wait_shown("snap-layouts-picker", 1.0)
         settle()
         cell = ctx.actor("snap-layouts-zone:halves:1")

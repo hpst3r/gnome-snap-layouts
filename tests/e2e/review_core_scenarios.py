@@ -563,7 +563,7 @@ def second_monitor(ctx):
 def drag_to_picker_on(ctx, win, mon):
     r = mon["rect"]
     ctx.begin_drag(win)
-    ctx.glide(r["x"] + r["width"] / 2, mon["workArea"]["y"] + 10, steps=30)
+    ctx.glide(r["x"] + r["width"] / 2, mon["workArea"]["y"] + 2, steps=30)
     return ctx.wait_shown("snap-layouts-picker", 1.5)
 
 
@@ -595,7 +595,7 @@ def sc_mm_cross(ctx):
     # pressure barrier of monitor 1, so go round below the top bar.)
     ctx.glide(960, 300, steps=10)
     ctx.glide(r["x"] + r["width"] / 2, 300, steps=30)
-    ctx.glide(r["x"] + r["width"] / 2, m1["workArea"]["y"] + 10, steps=15)
+    ctx.glide(r["x"] + r["width"] / 2, m1["workArea"]["y"] + 2, steps=15)
     time.sleep(0.5)
     ps = pickers(ctx)
     if len(ps) != 1 or not (r["x"] <= ps[0]["x"] < r["x"] + r["width"]):
